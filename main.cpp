@@ -1,7 +1,9 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <string>
+#include <vector>
 
 // The Lexer return [0-255] for unknown tokens but the following for the knowns
 
@@ -76,3 +78,70 @@ static int gettok() {
   return ThisChar;
 
 }
+
+// when we have a parser we will define & build an AST
+
+// Blueprint for AST
+class ExprAST {
+public:
+  virtual ~ExprAST() = default;
+};
+
+// for numeric literals
+class NumberExprAST : public ExprAST {
+  double m_Val;
+public:
+  NumberExprAST(double Val) : m_Val(Val) {}
+};
+
+// for refrencing a variable like "x"
+class VariableExprAST : public ExprAST {
+  std::string m_Name;
+public:
+  VariableExprAST(const std::string &Name) : m_Name(Name) {}
+};
+
+// for Binary Expressions like x+y
+class BinaryExprAST : public ExprAST {
+  char m_Op;
+  std::unique_ptr<ExprAST> m_LHS, m_RHS;
+
+public:
+  BinaryExprAST(char Op, std::unique_ptr<ExprAST> LHS, std::unique_ptr<ExprAST> RHS)
+    : m_Op(Op), m_LHS(std::move(LHS)), m_RHS(std::move(RHS)) {}
+};
+
+// for Call Expressions like functions calls say, factorial(5)
+class CallExprAST : public ExprAST {
+  std::string m_Callee;
+  std::vector<std::unique_ptr<ExprAST>> m_Args;
+
+public:
+  CallExprAST(const std::string &Callee, std::vector<std::unique_ptr<ExprAST>> Args)
+    : m_Callee(Callee), m_Args(std::move(Args)) {}
+};
+
+/// PrototypeAST - This class represents the "prototype" for a function,
+/// which captures its name, and its argument names (thus implicitly the number
+/// of arguments the function takes).
+class PrototypeAST {
+  std::string m_Name;
+  std::vector<std::string> m_Args;
+
+public:
+  PrototypeAST(const std::string &Name, std::vector<std::string> Args)
+    : m_Name(Name), m_Args(std::move(Args)) {}
+
+  const std::string &getName() const { return m_Name; }
+};
+
+// for *Function Definition*
+class FunctionAST {
+  std::unique_ptr<PrototypeAST> m_Proto;
+  std::unique_ptr<ExprAST> m_Body;
+
+public:
+  FunctionAST(std::unique_ptr<PrototypeAST> Proto,
+	      std::unique_ptr<ExprAST> Body)
+    : m_Proto(std::move(Proto)), m_Body(std::move(Body)) {}
+};
