@@ -3,7 +3,9 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <vector>
+#include <map>
 
 // The Lexer return [0-255] for unknown tokens but the following for the knowns
 
@@ -230,4 +232,66 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
   case '(':
     return ParseParenExpr();
   }
+}
+
+static std::map<char, int> BinopPrecedence;
+
+// get token precedence
+static int GetTokPrecedence() {
+  if (!isascii(CurTok))
+    return -1;
+
+  // make sure it is a declared Binop
+  int TokPrec = BinopPrecedence[CurTok];
+  if (TokPrec <= 0) return -1;
+  return TokPrec;
+}
+
+static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
+					      std::unique_ptr<ExprAST> LHS);
+
+//   expression := primary [binoprhs]
+static std::unique_ptr<ExprAST> ParseExpression() {
+  auto LHS = ParsePrimary();
+  if (!LHS)
+    return nullptr;
+  return ParseBinOpRHS(0, std::move(LHS));
+}
+
+// binoprhs := ( op primary)
+static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
+					      std::unique_ptr<ExprAST> LHS) {
+  while (true) {
+    int TokPrec = GetTokPrecedence();
+
+    // when RHS is empty
+    if (TokPrec < ExprPrec)
+      return LHS;
+
+    // now we know it is a binop
+    int Binop = CurTok;
+    getNextToken(); // eat binop
+
+    auto RHS =  ParsePrimary();
+    if (!RHS)
+      return nullptr;
+
+    int NextPrec = GetTokPrecedence();
+    if (TokPrec < NextPrec) {
+      RHS = ParseBinOpRHS(TokPrec+1, std::move(RHS));
+      if (!RHS)
+	return nullptr;
+    }
+    LHS = std::make_unique<BinaryExprAST>(Binop, std::move(LHS), std::move(RHS));
+  }
+}
+
+int main() {
+  BinopPrecedence['<'] = 10;
+  BinopPrecedence['>'] = 10;
+  BinopPrecedence['-'] = 20;
+  BinopPrecedence['+'] = 20;
+  BinopPrecedence['*'] = 40;
+  BinopPrecedence['/'] = 40;
+
 }
