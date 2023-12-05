@@ -1,6 +1,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <memory>
 #include <string>
 #include <system_error>
@@ -340,6 +341,28 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
   return nullptr;
 }
 
+// for top level parsing
+static void HandleDefinition() {
+  if (ParseDefinition()) {
+    fprintf(stderr, "Parsed a function definition\n");
+  } else {
+    getNextToken(); // for error recovery
+  }
+}
+
+static void HandleExtern() {
+  if (ParseExtern())
+    fprintf(stderr, "Parsed an extern\n");
+  else
+    getNextToken();
+}
+
+static void HandleTopLevelExpr() {
+  if (ParseTopLevelExpr())
+    fprintf(stderr, "Parsed a top level expression\n");
+  else
+    getNextToken();
+}
 
 int main() {
   BinopPrecedence['<'] = 10;
