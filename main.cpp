@@ -364,6 +364,28 @@ static void HandleTopLevelExpr() {
     getNextToken();
 }
 
+/// top ::= definition | external | expression | ';'
+void MainLoop() {
+  while (true) {
+    fprintf(stderr, "ready> ");
+    switch (CurTok) {
+    case tok_eof:
+      return;
+    case ';':
+      getNextToken();		// ignore top level semicolon
+      break;
+    case tok_def:
+      HandleDefinition();
+      break;
+    case tok_extern:
+      HandleExtern();
+      break;
+    default:
+      HandleDefinition();
+    }
+  }
+}
+
 int main() {
   BinopPrecedence['<'] = 10;
   BinopPrecedence['>'] = 10;
@@ -372,4 +394,10 @@ int main() {
   BinopPrecedence['*'] = 40;
   BinopPrecedence['/'] = 40;
 
+  fprintf(stderr, "ready> ");
+  getNextToken();
+
+  MainLoop();
+
+  return 0;
 }
