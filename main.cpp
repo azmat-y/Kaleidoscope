@@ -164,3 +164,70 @@ std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
   LogError(Str);
   return nullptr;
 }
+
+// numberexpr := number
+static std::unique_ptr<ExprAST> ParseNumberExpr() {
+  auto Result = std::make_unique<NumberExprAST>(NumVal);
+  getNextToken();
+  return std::move(Result);
+}
+
+static std::unique_ptr<ExprAST> ParseExpression();
+
+// parenexpr := '(' expression ')'
+static std::unique_ptr<ExprAST> ParseParenExpr() {
+  getNextToken(); // eat (
+  auto V = ParseExpression();
+  if (!V)
+    return nullptr;
+  getNextToken(); // eat )
+  return  V;
+}
+
+// for parsing identifiers, funcitons calls
+// identifier := identifier
+//            := identifier '(' expression ')'
+static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
+  std::string IdName = IdentifierStr;
+  getNextToken(); // eat Identifier
+  if (CurTok != '(')		// this implies it is a variable
+    return std::make_unique<VariableExprAST>(IdName);
+
+  // when it is a function call
+  getNextToken(); // eat (
+  std::vector<std::unique_ptr<ExprAST>> Args;
+  if (CurTok != ')') {
+    while (true) {
+      if (auto Arg = ParseExpression())
+	Args.push_back(std::move(Arg));
+      else
+	return nullptr;
+      if (CurTok == ')')
+	break;
+      if (CurTok != ',')
+	return LogError("Expected ')' or ',' in argument list");
+      getNextToken();
+    }
+  }
+  getNextToken(); // eat )
+  return std::make_unique<CallExprAST>(IdName, std::move(Args));
+}
+
+/*
+  primary
+  := identifierexpr
+  := numberexpr
+  := parenexpr
+ */
+static std::unique_ptr<ExprAST> ParsePrimary() {
+  switch (CurTok) {
+  default:
+    return LogError("Unknown token when expecting an expression.");
+  case tok_identifier:
+    return ParseIdentifierExpr();
+  case tok_number:
+    return ParseNumberExpr();
+  case '(':
+    return ParseParenExpr();
+  }
+}
