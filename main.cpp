@@ -365,7 +365,7 @@ static void HandleTopLevelExpr() {
 }
 
 /// top ::= definition | external | expression | ';'
-void MainLoop() {
+static void MainLoop() {
   while (true) {
     fprintf(stderr, "ready> ");
     switch (CurTok) {
@@ -381,7 +381,7 @@ void MainLoop() {
       HandleExtern();
       break;
     default:
-      HandleDefinition();
+      HandleTopLevelExpr();
     }
   }
 }
