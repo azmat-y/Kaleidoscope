@@ -145,3 +145,22 @@ public:
 	      std::unique_ptr<ExprAST> Body)
     : m_Proto(std::move(Proto)), m_Body(std::move(Body)) {}
 };
+
+// now we will build the parser to build our AST
+
+// Helper functions to look one token ahead
+static int CurTok;
+static int getNextToken() {
+  return CurTok = gettok();
+}
+
+// Helper functions for error handling
+std::unique_ptr<ExprAST> LogError(const char *Str) {
+  fprintf(stderr, "Error: %s\n", Str);
+  return nullptr;
+}
+
+std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
+  LogError(Str);
+  return nullptr;
+}
