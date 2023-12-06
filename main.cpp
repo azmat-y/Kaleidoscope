@@ -359,6 +359,51 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
   return nullptr;
 }
 
+static std::unique_ptr<LLVMContext> TheContext;
+static std::unique_ptr<IRBuilder<>> Builder(TheContext);
+static std::unique_ptr<Module> TheModule;
+static std::map<std::string, Value *> NamedValues;
+
+Value *LogErrorV(const char *Str) {
+  LogError(Str);
+  return nullptr;
+}
+
+Value *NumberExprAST::codegen() {
+  return ConstantFP::get(*TheContext, APFloat(m_Val));
+}
+
+Value *VariableExprAST::codegen() {
+  Value *V = NamedValues[m_Name];
+  if (!V)
+    return LogErrorV("Unknown Variable Name");
+ return V;
+}
+
+Value *BinaryExprAST::codegen() {
+  Value *L = m_LHS->codegen();
+  Value *R = m_RHS->codegen();
+
+  if (!L || !R)
+    return nullptr;
+
+  switch (m_Op) {
+  case '+':
+    return Builder->CreateFAdd(L, R, "addtmp");
+  case '-':
+    return Builder->CreateFSub(L, R, "subtmp");
+  case '*':
+    return Builder->CreateFMul(L, R, "multmp");
+  case '/':
+    return Builder->CreateFDiv(L, R, "divtmp");
+  case '<':
+    L = Builder->CreateFCmpULT(L, R, "cmptmp");
+    return Builder->CreateUIToFP(L, Type::getDoubleTy(*TheContext),
+				  "booltmp");
+  default:
+    return LogErrorV("invalid binary operator");
+  }
+}
 // for top level parsing
 static void HandleDefinition() {
   if (ParseDefinition()) {
