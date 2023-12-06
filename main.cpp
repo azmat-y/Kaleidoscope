@@ -404,6 +404,81 @@ Value *BinaryExprAST::codegen() {
     return LogErrorV("invalid binary operator");
   }
 }
+
+Value *CallExprAST::codegen() {
+  // lookup name in global module table
+  Function *CalleeF = TheModule->getFunction(m_Callee);
+  if (!CalleeF)
+    return LogErrorV("Unknown Function refrenced");
+
+  // if arguments do not match
+  if (CalleeF->arg_size() != m_Args.size())
+    return LogErrorV("Incorrect # of arguments");
+
+  std::vector<Value*> ArgsV;
+  for (unsigned i=0, e = m_Args.size(); i!=e; i++) {
+    ArgsV.push_back(m_Args[i]->codegen());
+    if (!ArgsV.back())
+      return nullptr;
+  }
+  return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
+}
+
+Function *PrototypeAST::codegen() {
+  // our language only supports doubles so functions will be of form
+  // double(double, double ...)
+  std::vector<Type*> Doubles(m_Args.size(), Type::getDoubleTy(*TheContext));
+
+  FunctionType *FT =
+    FunctionType::get(Type::getDoubleTy(*TheContext), Doubles, false);
+
+  Function *F =
+    Function::Create(FT, Function::ExternalLinkage, m_Name, TheModule.get());
+
+  unsigned Idx = 0;
+  for (auto &Arg : F->args())
+    Arg.setName(m_Args[Idx++]);
+
+  return F;
+}
+
+Function *FunctionAST::codegen() {
+  // first check for previous function
+  Function *TheFunction = TheModule->getFunction(m_Proto->getName());
+  if (!TheFunction)
+    TheFunction = m_Proto->codegen();
+
+  if (!TheFunction)
+    return nullptr;
+
+  if (!TheFunction->empty())
+    return (Function*)LogErrorV("Function cannot be redifined");
+
+  // now that we've checked that funnction body is empty
+  BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", TheFunction);
+  Builder->SetInsertPoint(BB);
+
+  // record fun arguments in Namedvalues
+  for (auto &Arg : TheFunction->args())
+    NamedValues[std::string(Arg.getName())] = &Arg;
+
+  if (Value *RetVal = m_Body->codegen()) {
+    // finish the function
+    Builder->CreateRet(RetVal);
+
+    // validate the generated code for consistency
+    verifyFunction(*TheFunction);
+
+    return TheFunction;
+  }
+
+  /// reading erorr remove the function
+  TheFunction->eraseFromParent();
+  return nullptr;
+}
+
+
+
 // for top level parsing
 static void HandleDefinition() {
   if (ParseDefinition()) {
