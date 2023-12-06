@@ -116,6 +116,7 @@ class VariableExprAST : public ExprAST {
   std::string m_Name;
 public:
   VariableExprAST(const std::string &Name) : m_Name(Name) {}
+  Value *codegen() override;
 };
 
 // for Binary Expressions like x+y
@@ -126,6 +127,7 @@ class BinaryExprAST : public ExprAST {
 public:
   BinaryExprAST(char Op, std::unique_ptr<ExprAST> LHS, std::unique_ptr<ExprAST> RHS)
     : m_Op(Op), m_LHS(std::move(LHS)), m_RHS(std::move(RHS)) {}
+  Value *codegen() override;
 };
 
 // for Call Expressions like functions calls say, factorial(5)
@@ -136,6 +138,7 @@ class CallExprAST : public ExprAST {
 public:
   CallExprAST(const std::string &Callee, std::vector<std::unique_ptr<ExprAST>> Args)
     : m_Callee(Callee), m_Args(std::move(Args)) {}
+  Value *codegen() override;
 };
 
 /// PrototypeAST - This class represents the "prototype" for a function,
@@ -149,6 +152,7 @@ public:
   PrototypeAST(const std::string &Name, std::vector<std::string> Args)
     : m_Name(Name), m_Args(std::move(Args)) {}
 
+  Function *codegen();
   const std::string &getName() const { return m_Name; }
 };
 
@@ -161,6 +165,7 @@ public:
   FunctionAST(std::unique_ptr<PrototypeAST> Proto,
 	      std::unique_ptr<ExprAST> Body)
     : m_Proto(std::move(Proto)), m_Body(std::move(Body)) {}
+  Function *codegen();
 };
 
 // now we will build the parser to build our AST
@@ -180,23 +185,6 @@ std::unique_ptr<ExprAST> LogError(const char *Str) {
 std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
   LogError(Str);
   return nullptr;
-}
-
-static std::unique_ptr<LLVMContext> TheContext;
-static std::unique_ptr<IRBuilder<>> Builder(TheContext);
-static std::unique_ptr<Module> TheModule;
-static std::map<std::string, Value *> NamedValues;
-
-Value *LogErrorV(const char *Str) {
-  LogError(Str);
-  return nullptr;
-}
-
-// numberexpr := number
-static std::unique_ptr<ExprAST> ParseNumberExpr() {
-  auto Result = std::make_unique<NumberExprAST>(NumVal);
-  getNextToken();
-  return std::move(Result);
 }
 
 static std::unique_ptr<ExprAST> ParseExpression();
@@ -240,6 +228,12 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
   return std::make_unique<CallExprAST>(IdName, std::move(Args));
 }
 
+// numberexpr := number
+static std::unique_ptr<ExprAST> ParseNumberExpr() {
+  auto Result = std::make_unique<NumberExprAST>(NumVal);
+  getNextToken();
+  return std::move(Result);
+}
 /*
   primary
   := identifierexpr
