@@ -1,14 +1,26 @@
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Verifier.h"
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
-#include <exception>
 #include <memory>
 #include <string>
-#include <system_error>
 #include <vector>
 #include <map>
 
-// The Lexer return [0-255] for unknown tokens but the following for the knowns
+    // The Lexer return [0-255] for unknown tokens but the following for the
+    // knowns
+
+using namespace llvm;
 
 enum Token {
   tok_eof = -1,
@@ -88,6 +100,7 @@ static int gettok() {
 class ExprAST {
 public:
   virtual ~ExprAST() = default;
+  virtual Value *codegen() = 0;
 };
 
 // for numeric literals
@@ -95,6 +108,7 @@ class NumberExprAST : public ExprAST {
   double m_Val;
 public:
   NumberExprAST(double Val) : m_Val(Val) {}
+  Value *codegen() override;
 };
 
 // for refrencing a variable like "x"
@@ -164,6 +178,16 @@ std::unique_ptr<ExprAST> LogError(const char *Str) {
 }
 
 std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
+  LogError(Str);
+  return nullptr;
+}
+
+static std::unique_ptr<LLVMContext> TheContext;
+static std::unique_ptr<IRBuilder<>> Builder(TheContext);
+static std::unique_ptr<Module> TheModule;
+static std::map<std::string, Value *> NamedValues;
+
+Value *LogErrorV(const char *Str) {
   LogError(Str);
   return nullptr;
 }
