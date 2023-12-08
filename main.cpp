@@ -360,8 +360,8 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
 }
 
 static std::unique_ptr<LLVMContext> TheContext;
-static std::unique_ptr<IRBuilder<>> Builder(TheContext);
 static std::unique_ptr<Module> TheModule;
+static std::unique_ptr<IRBuilder<>> Builder;
 static std::map<std::string, Value *> NamedValues;
 
 Value *LogErrorV(const char *Str) {
@@ -477,6 +477,13 @@ Function *FunctionAST::codegen() {
   return nullptr;
 }
 
+// top level parsing and jit driver
+static void InitializeModule() {
+  TheContext = std::make_unique<LLVMContext>();
+  TheModule = std::make_unique<Module>("my jit", *TheContext);
+
+  Builder = std::make_unique<IRBuilder<>>(*TheContext);
+}
 
 
 // for top level parsing
