@@ -459,6 +459,7 @@ Function *FunctionAST::codegen() {
   Builder->SetInsertPoint(BB);
 
   // record fun arguments in Namedvalues
+  NamedValues.clear();
   for (auto &Arg : TheFunction->args())
     NamedValues[std::string(Arg.getName())] = &Arg;
 
@@ -488,25 +489,40 @@ static void InitializeModule() {
 
 // for top level parsing
 static void HandleDefinition() {
-  if (ParseDefinition()) {
-    fprintf(stderr, "Parsed a function definition\n");
+  if (auto FnAST = ParseDefinition()) {
+    if (auto *FnIR = FnAST->codegen()){
+      fprintf(stderr, "Read a function definition\n");
+      FnIR->print(errs());
+      fprintf(stderr, "\n");
+    }
   } else {
     getNextToken(); // for error recovery
   }
 }
 
 static void HandleExtern() {
-  if (ParseExtern())
-    fprintf(stderr, "Parsed an extern\n");
-  else
-    getNextToken();
+  if (auto ProtoAST = ParseExtern()) {
+    if (auto *FnIR = ProtoAST->codegen()){
+      fprintf(stderr, "Read a function definition\n");
+      FnIR->print(errs());
+      fprintf(stderr, "\n");
+    }
+  } else {
+    getNextToken(); // for error recovery
+  }
 }
 
 static void HandleTopLevelExpr() {
-  if (ParseTopLevelExpr())
-    fprintf(stderr, "Parsed a top level expression\n");
-  else
-    getNextToken();
+  if (auto FnAST = ParseTopLevelExpr()) {
+    if (auto *FnIR = FnAST->codegen()){
+      fprintf(stderr, "Read a function definition\n");
+      FnIR->print(errs());
+      fprintf(stderr, "\n");
+      FnIR->removeFromParent();
+    }
+  } else {
+    getNextToken(); // for error recovery
+  }
 }
 
 /// top ::= definition | external | expression | ';'
@@ -542,7 +558,11 @@ int main() {
   fprintf(stderr, "ready> ");
   getNextToken();
 
+  InitializeModule();
+
   MainLoop();
+
+  TheModule->print(errs(), nullptr);
 
   return 0;
 }
