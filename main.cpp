@@ -1,3 +1,4 @@
+#include "KaleidoscopeJIT.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/BasicBlock.h"
@@ -7,11 +8,15 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/PassManager.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/StandardInstrumentations.h"
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <llvm/Support/Error.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -21,6 +26,7 @@
     // knowns
 
 using namespace llvm;
+using namespace llvm::orc;
 
 enum Token {
   tok_eof = -1,
@@ -359,10 +365,21 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
   return nullptr;
 }
 
+// for codegen
 static std::unique_ptr<LLVMContext> TheContext;
 static std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
 static std::map<std::string, Value *> NamedValues;
+static std::unique_ptr<KaleidoscopeJIT> TheJIT;
+static std::unique_ptr<FunctionPassManager> TheFPM;
+static std::unique_ptr<LoopAnalysisManager> TheLAM;
+static std::unique_ptr<FunctionAnalysisManager> TheFAM;
+static std::unique_ptr<CGSCCAnalysisManager> TheCGAM;
+static std::unique_ptr<ModuleAnalysisManager> TheMAM;
+static std::unique_ptr<PassInstrumentationCallbacks> ThePIC;
+static std::unique_ptr<StandardInstrumentations> TheSI;
+static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
+static ExitOnError ExitOnErr;
 
 Value *LogErrorV(const char *Str) {
   LogError(Str);
@@ -479,10 +496,13 @@ Function *FunctionAST::codegen() {
 }
 
 // top level parsing and jit driver
-static void InitializeModule() {
+static void InitializeModuleAndManagers() {
+  // open new context and module
   TheContext = std::make_unique<LLVMContext>();
-  TheModule = std::make_unique<Module>("my jit", *TheContext);
+  TheModule = std::make_unique<Module>("Kaliedoscope JIT", *TheContext);
+  TheModule->setDataLayout(TheJIT->getDataLayout());
 
+  // create a new builder for module
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
 }
 
@@ -525,6 +545,7 @@ static void HandleTopLevelExpr() {
   }
 }
 
+
 /// top ::= definition | external | expression | ';'
 static void MainLoop() {
   while (true) {
@@ -558,7 +579,7 @@ int main() {
   fprintf(stderr, "ready> ");
   getNextToken();
 
-  InitializeModule();
+  InitializeModuleAndManagers();
 
   MainLoop();
 
