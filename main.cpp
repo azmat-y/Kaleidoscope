@@ -13,9 +13,19 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/StandardInstrumentations.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Scalar/Reassociate.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <llvm/Analysis/CGSCCPassManager.h>
+#include <llvm/Analysis/LoopAnalysisManager.h>
+#include <llvm/IR/PassInstrumentation.h>
 #include <llvm/Support/Error.h>
 #include <memory>
 #include <string>
@@ -504,6 +514,32 @@ static void InitializeModuleAndManagers() {
 
   // create a new builder for module
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
+
+  // create a new pass and analysis managers
+  TheFPM = std::make_unique<FunctionPassManager>();
+  TheLAM = std::make_unique<LoopAnalysisManager>();
+  TheFAM = std::make_unique<FunctionAnalysisManager>();
+  TheCGAM = std::make_unique<CGSCCAnalysisManager>();
+  TheMAM = std::make_unique<ModuleAnalysisManager>();
+  ThePIC = std::make_unique<PassInstrumentationCallbacks>();
+  TheSI = std::make_unique<StandardInstrumentations>(*TheContext, true); // debugging logging
+
+  TheSI->registerCallbacks(*ThePIC, TheMAM.get());
+  // add transform passes and do simple optimizations
+
+  TheFPM->addPass(InstCombinePass());
+  TheFPM->addPass(ReassociatePass());
+
+  // eliminate subexpression
+  TheFPM->addPass(GVNPass());
+
+  // simplify control flow graph
+  TheFPM->addPass(SimplifyCFGPass());
+
+  PassBuilder PB;
+  PB.registerModuleAnalyses(*TheMAM);
+  PB.registerFunctionAnalyses(*TheFAM);
+  PB.crossRegisterProxies(*TheLAM, *TheFAM, *TheCGAM, *TheMAM);
 }
 
 
