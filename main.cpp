@@ -396,6 +396,19 @@ Value *LogErrorV(const char *Str) {
   return nullptr;
 }
 
+Function *getFunction(std::string Name) {
+  // has the function already added to current module
+  if (auto *F = TheModule->getFunction(Name))
+    return F;
+
+  // can existing prototypes codgen this function
+  auto FI = FunctionProtos.find(Name);
+  if (FI != FunctionProtos.end())
+    return FI->second->codegen();
+
+  return nullptr;
+}
+
 Value *NumberExprAST::codegen() {
   return ConstantFP::get(*TheContext, APFloat(m_Val));
 }
