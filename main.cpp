@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <llvm/Analysis/CGSCCPassManager.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
+#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/IR/PassInstrumentation.h>
 #include <llvm/Support/Error.h>
 #include <memory>
@@ -369,7 +370,7 @@ static std::unique_ptr<PrototypeAST> ParseExtern() {
 static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
   if (auto E = ParseExpression()){
     // make anonymous prototype
-    auto Proto = std::make_unique<PrototypeAST>("", std::vector<std::string>());
+    auto Proto = std::make_unique<PrototypeAST>("__anon_expr", std::vector<std::string>());
     return std::make_unique<FunctionAST>(std::move(Proto), std::move(E));
   }
   return nullptr;
@@ -483,16 +484,12 @@ Function *PrototypeAST::codegen() {
 }
 
 Function *FunctionAST::codegen() {
-  // first check for previous function
-  Function *TheFunction = TheModule->getFunction(m_Proto->getName());
-  if (!TheFunction)
-    TheFunction = m_Proto->codegen();
 
+  auto &P = *m_Proto;
+  FunctionProtos[m_Proto->getName()] = std::move(m_Proto);
+  Function *TheFunction = getFunction(P.getName());
   if (!TheFunction)
     return nullptr;
-
-  if (!TheFunction->empty())
-    return (Function*)LogErrorV("Function cannot be redifined");
 
   // now that we've checked that funnction body is empty
   BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", TheFunction);
@@ -510,6 +507,8 @@ Function *FunctionAST::codegen() {
     // validate the generated code for consistency
     verifyFunction(*TheFunction);
 
+    // run the optimizer on the function
+    TheFPM->run(*TheFunction, *TheFAM);
     return TheFunction;
   }
 
@@ -583,14 +582,26 @@ static void HandleExtern() {
 
 static void HandleTopLevelExpr() {
   if (auto FnAST = ParseTopLevelExpr()) {
-    if (auto *FnIR = FnAST->codegen()){
-      fprintf(stderr, "Read a function definition\n");
-      FnIR->print(errs());
-      fprintf(stderr, "\n");
-      FnIR->removeFromParent();
+    if (FnAST->codegen()) {
+      // create a Resouce Tracker to track JIT'd memory allocated to our anonymous
+      // expression so we free it after executing
+      auto RT = TheJIT->getMainJITDylib().createResourceTracker();
+      auto TSM = ThreadSafeModule(std::move(TheModule), std::move(TheContext));
+      ExitOnErr(TheJIT->addModule(std::move(TSM), RT));
+      InitializeModuleAndManagers();
+
+      // search JIT for __anon_expr symbol
+      auto ExprSymbol = ExitOnErr(TheJIT->lookup("__anon_expr"));
+
+      // get symbol address and cast it to right address i.e. double
+      double (*FP)() = ExprSymbol.getAddress().toPtr<double (*)()>();
+      fprintf(stderr, "Evaluated to %f\n", FP());
+
+      // delete resources
+      ExitOnErr(RT->remove());
     }
   } else {
-    getNextToken(); // for error recovery
+    getNextToken();
   }
 }
 
@@ -618,6 +629,10 @@ static void MainLoop() {
 }
 
 int main() {
+  InitializeNativeTarget();
+  InitializeNativeTargetAsmPrinter();
+  InitializeNativeTargetAsmParser();
+
   BinopPrecedence['<'] = 10;
   BinopPrecedence['>'] = 10;
   BinopPrecedence['-'] = 20;
@@ -628,7 +643,7 @@ int main() {
   fprintf(stderr, "ready> ");
   getNextToken();
 
-  InitializeModuleAndManagers();
+  // InitializeModuleAndManagers();
 
   MainLoop();
 
