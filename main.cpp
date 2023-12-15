@@ -562,6 +562,9 @@ static void HandleDefinition() {
       fprintf(stderr, "Read a function definition\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
+      ExitOnErr(TheJIT->addModule(ThreadSafeModule(std::move(TheModule),
+						   std::move(TheContext))));
+      InitializeModuleAndManagers();
     }
   } else {
     getNextToken(); // for error recovery
@@ -574,6 +577,7 @@ static void HandleExtern() {
       fprintf(stderr, "Read a function definition\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
+      FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST);
     }
   } else {
     getNextToken(); // for error recovery
@@ -643,11 +647,10 @@ int main() {
   fprintf(stderr, "ready> ");
   getNextToken();
 
-  // InitializeModuleAndManagers();
+  TheJIT = ExitOnErr(KaleidoscopeJIT::Create());
+  InitializeModuleAndManagers();
 
   MainLoop();
-
-  TheModule->print(errs(), nullptr);
 
   return 0;
 }
