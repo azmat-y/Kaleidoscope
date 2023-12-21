@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 19,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build"
+    },
+    {
+      "name": "debug",
+      "displayName": "GCC",
+	"inherits": "base",
+      "description": "Debug build options for GCC",
+      "cacheVariables": {
+          "CMAKE_CXX_FLAGS": "  -rdynamic  -ggdb -O0 -I/usr/include -std=c++17   -fno-exceptions -funwind-tables -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -lLLVM-17 -lLLVM-17",
+	  "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "GCC",
+      "description": "Release build options for Clang",
+	"inherits": "base",
+      "cacheVariables": {
+          "CMAKE_CXX_FLAGS": "  -rdynamic -O3 -I/usr/include -std=c++17   -fno-exceptions -funwind-tables -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -lLLVM-17 -lLLVM-17",
+	  "CMAKE_CXX_COMPILER": "g++"
+      }
+    }
+  ]
+}
