@@ -1,0 +1,14 @@
+#+TITLE: README
+* Kaleidoscope
+Writing a compiler for a toy language Kaleidoscope by following the tutorial mentioned here [[https://llvm.org/docs/tutorial/MyFirstLanguageFrontend/index.html][Implementing Language with LLVM]]
+** Why ?
+Compilers felt like a cheat code to me with how much efficient they are in generating native executables. To demystify it, I decided on building one to understand how one might work.
+** Quickstart
+To build the program insure that you have cmake and g++ installed and in your path.
+#+begin_src bash
+git clone https://github.com/azmat-y/Kaleidoscope
+cd Kaleidoscope
+mkdir build
+cmake --preset=release # generate cmake files
+cmake --build build    # build the project
+#+end_src
