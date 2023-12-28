@@ -10,6 +10,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
+#include <memory>
 
 using namespace llvm;
 // when we have a parser we will define & build an AST
@@ -84,4 +85,14 @@ public:
 	      std::unique_ptr<ExprAST> Body)
     : m_Proto(std::move(Proto)), m_Body(std::move(Body)) {}
   Function *codegen();
+};
+
+class IfExprAST : public ExprAST {
+  std::unique_ptr<ExprAST> m_Cond, m_Then, m_Else;
+public:
+  IfExprAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<ExprAST> Then,
+	    std::unique_ptr<ExprAST> Else)
+    : m_Cond(std::move(Cond)), m_Then(std::move(Then)), m_Else(std::move(Else)) {}
+
+  Value* codegen() override;
 };
