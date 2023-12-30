@@ -11,6 +11,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
 #include <memory>
+#include <string>
 
 using namespace llvm;
 // when we have a parser we will define & build an AST
@@ -95,4 +96,19 @@ public:
     : m_Cond(std::move(Cond)), m_Then(std::move(Then)), m_Else(std::move(Else)) {}
 
   Value* codegen() override;
+};
+
+// for `for loops`
+class ForExprAST : public ExprAST {
+  std::string m_VarName;
+  std::unique_ptr<ExprAST> m_Start, m_End, m_Step, m_Body;
+
+public:
+  ForExprAST(const std::string &VarName, std::unique_ptr<ExprAST> Start,
+	     std::unique_ptr<ExprAST> End, std::unique_ptr<ExprAST> Step,
+	     std::unique_ptr<ExprAST> Body)
+    : m_VarName(VarName), m_Start(std::move(Start)), m_End(std::move(End)),
+      m_Step(std::move(Step)), m_Body(std::move(Body)) {}
+
+  Value *codegen() override;
 };
