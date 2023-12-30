@@ -1,6 +1,7 @@
 #include "include/AST.h"
 #include "include/lexer.h"
 #include <cstdio>
+#include <llvm/IR/Value.h>
 #include <memory>
 #include <map>
 
@@ -58,6 +59,9 @@ std::unique_ptr<ExprAST> ParseNumberExpr() {
   getNextToken();
   return std::move(Result);
 }
+
+std::unique_ptr<ExprAST> ParseIfExpr();
+
 /*
   primary
   := identifierexpr
@@ -74,6 +78,8 @@ std::unique_ptr<ExprAST> ParsePrimary() {
     return ParseNumberExpr();
   case '(':
     return ParseParenExpr();
+  case tok_if:
+    return ParseIfExpr();
   }
 }
 
@@ -188,4 +194,31 @@ std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
     return std::make_unique<FunctionAST>(std::move(Proto), std::move(E));
   }
   return nullptr;
+}
+
+// ifexpr ::= 'if' expression 'then' expression 'else' expression
+std::unique_ptr<ExprAST> ParseIfExpr() {
+  getNextToken(); // eat 'if'
+
+  auto Cond = ParseExpression();
+  if (!Cond)
+    return nullptr;
+
+  if (CurTok != tok_then)
+    return LogError<ExprAST>("expected `then`");
+  getNextToken(); // eat 'then'
+
+  auto Then = ParseExpression();
+  if (!Then)
+    return nullptr;
+
+  if (CurTok != tok_else)
+    return LogError<ExprAST>("expected `else`");
+  getNextToken(); // eat 'else'
+
+  auto Else = ParseExpression();
+  if (!Else)
+    return nullptr;
+
+  return std::make_unique<IfExprAST>(std::move(Cond), std::move(Then), std::move(Else));
 }

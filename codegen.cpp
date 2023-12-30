@@ -8,8 +8,10 @@
 #include "include/parser.h"
 #include "include/lexer.h"
 #include <cstdio>
+#include <llvm/ADT/APFloat.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Analysis/CGSCCPassManager.h>
+#include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/PassInstrumentation.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
@@ -162,6 +164,57 @@ Function *FunctionAST::codegen() {
   TheFunction->eraseFromParent();
   return nullptr;
 }
+
+// generate code for conditional statements
+Value *IfExprAST::codegen() {
+  // since condition is just an expression
+  Value *CondV = m_Cond->codegen();
+  if (!CondV)
+    return nullptr;
+
+  // convert condition to bool
+  CondV = Builder->CreateFCmpONE(CondV,
+				 ConstantFP::get(*TheContext, APFloat(0.0)), "ifcond");
+  Function *TheFunction = Builder->GetInsertBlock()->getParent();
+
+  // create BasicBlock for then and else
+  BasicBlock *ThenBB =
+    BasicBlock::Create(*TheContext, "then", TheFunction);
+  BasicBlock *ElseBB = BasicBlock::Create(*TheContext, "else");
+  BasicBlock *MergeBB = BasicBlock::Create(*TheContext, "ifcont");
+
+  Builder->CreateCondBr(CondV, ThenBB, ElseBB);
+
+  // emit then value
+  Builder->SetInsertPoint(ThenBB);
+
+  Value *ThenV = m_Then->codegen();
+  if (!ThenV)
+    return nullptr;
+  Builder->CreateBr(MergeBB);
+  // Codegen of 'Then' can change the current block, update ThenBB for the PHI.
+  ThenBB = Builder->GetInsertBlock();
+
+  // emit else block
+  TheFunction->insert(TheFunction->end(), ElseBB);
+  Builder->SetInsertPoint(ElseBB);
+  Value *ElseV = m_Else->codegen();
+  if (!ElseV)
+    return nullptr;
+  Builder->CreateBr(ElseBB);
+  ElseBB = Builder->GetInsertBlock();
+
+  // emit merge block
+  TheFunction->insert(TheFunction->end(), MergeBB);
+  Builder->SetInsertPoint(MergeBB);
+  PHINode *PN =
+    Builder->CreatePHI(Type::getDoubleTy(*TheContext), 2, "iftmp");
+  PN->addIncoming(ThenV, ThenBB);
+  PN->addIncoming(ElseV, ElseBB);
+
+  return PN;
+}
+
 
 // top level parsing and jit driver
 void InitializeModuleAndManagers() {
