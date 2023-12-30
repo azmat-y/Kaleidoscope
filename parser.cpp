@@ -127,6 +127,8 @@ std::unique_ptr<ExprAST> ParsePrimary() {
     return ParseParenExpr();
   case tok_if:
     return ParseIfExpr();
+  case tok_for:
+    return ParseForExpr();
   }
 }
 
