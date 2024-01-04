@@ -4,6 +4,7 @@
 #include <llvm/IR/Value.h>
 #include <memory>
 #include <map>
+#include <utility>
 
 // helper function for logging error messages
 template <class T>
@@ -62,6 +63,52 @@ std::unique_ptr<ExprAST> ParseNumberExpr() {
 
 std::unique_ptr<ExprAST> ParseIfExpr();
 
+// forexpr ::= 'for' identifier '=' expr ',' expr (',' expr)? 'in' expression
+std::unique_ptr<ExprAST> ParseForExpr() {
+  getNextToken(); // eat for
+  if (CurTok != tok_identifier)
+    return LogError<ExprAST>("Expected identifier after for");
+
+  std::string IdName = IdentifierStr;
+  getNextToken(); // eat identifier
+
+  if (CurTok != '=')
+    return LogError<ExprAST>("Expected `=` after identifer");
+  getNextToken(); // eat `=`
+
+  auto Start = ParseExpression();
+  if (!Start)
+    return nullptr;
+  if (CurTok != ',')
+    return LogError<ExprAST>("Expected `,` after start");
+  getNextToken();
+
+  auto End = ParseExpression();
+  if (!End)
+    return nullptr;
+
+  // step value is optional
+  std::unique_ptr<ExprAST> Step;
+  if (CurTok == ',') {
+    getNextToken();
+    Step = ParseExpression();
+    if (!Step)
+      return nullptr;
+  }
+
+  if (CurTok != tok_in)
+    return LogError<ExprAST>("Expected `in` after for");
+  getNextToken(); // eat `in`
+
+  auto Body = ParseExpression();
+  if (!Body)
+    return nullptr;
+
+  return std::make_unique<ForExprAST>(IdName, std::move(Start),
+				      std::move(End), std::move(Step),
+				      std::move(Body));
+}
+
 /*
   primary
   := identifierexpr
@@ -80,6 +127,8 @@ std::unique_ptr<ExprAST> ParsePrimary() {
     return ParseParenExpr();
   case tok_if:
     return ParseIfExpr();
+  case tok_for:
+    return ParseForExpr();
   }
 }
 

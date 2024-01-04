@@ -12,6 +12,7 @@
 #include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Analysis/CGSCCPassManager.h>
 #include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassInstrumentation.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
@@ -215,6 +216,74 @@ Value *IfExprAST::codegen() {
   return PN;
 }
 
+Value *ForExprAST::codegen() {
+  // Emit start code before variable is in scope
+  Value *StartVal = m_Start->codegen();
+  if (!StartVal)
+    return nullptr;
+
+  // Make new basicblock for loop header, insertin after current
+  // current block
+  Function *TheFunction = Builder->GetInsertBlock()->getParent();
+  BasicBlock *PreHeaderBB = Builder->GetInsertBlock();
+  BasicBlock *LoopBB =
+    BasicBlock::Create(*TheContext, "loop", TheFunction);
+  // explicit fall to current block to loop block
+  Builder->CreateBr(LoopBB);
+
+  Builder->SetInsertPoint(LoopBB);
+  // start PHInode with an entry for start
+  PHINode *Variable = Builder->CreatePHI(Type::getDoubleTy(*TheContext),
+					 2, m_VarName);
+  Variable->addIncoming(StartVal, PreHeaderBB);
+
+  // withing the loop variable is defined equal to phi node
+  // if it shadows an existing variable then restore it
+  Value *OldVal = NamedValues[m_VarName];
+  NamedValues[m_VarName] = Variable;
+  // emit body of the loop
+  if (!m_Body->codegen())
+    return nullptr;
+  // emit step value
+  Value *StepVal = nullptr;
+  if (m_Step) {
+    StepVal = m_Step->codegen();
+    if (!StepVal)
+      return nullptr;
+  } else {
+    // if no step specified then use 1
+    StepVal = ConstantFP::get(*TheContext, APFloat(1.0));
+  }
+  // add step value to looo variable
+  Value *NextVar = Builder->CreateFAdd(Variable, StepVal, "nextvar");
+  // compute end condition
+  Value *EndCond = m_End->codegen();
+  if (!EndCond)
+    return nullptr;
+
+  // convert condition to bool by comparing it to 0
+  EndCond = Builder->CreateFCmpONE(
+				   EndCond, ConstantFP::get(*TheContext, APFloat(0.0)), "loopcond");
+  // after loop body
+  BasicBlock *LoopEndBB = Builder->GetInsertBlock();
+  BasicBlock *AfterBB =
+    BasicBlock::Create(*TheContext, "afterloop", TheFunction);
+  Builder->CreateCondBr(EndCond, LoopBB, AfterBB);
+  // any new code will be inserted in AfterBB
+  Builder->SetInsertPoint(AfterBB);
+
+  // add a new entry to the PHInode for the backedge
+  Variable->addIncoming(NextVar, LoopEndBB);
+
+  // restore the shadowed variable
+  if (OldVal)
+    NamedValues[m_VarName] = OldVal;
+  else
+   NamedValues.erase(m_VarName);
+
+  // `for loop` expr always return 0
+  return Constant::getNullValue(Type::getDoubleTy(*TheContext));
+}
 
 // top level parsing and jit driver
 void InitializeModuleAndManagers() {
