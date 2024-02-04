@@ -1,5 +1,6 @@
 #pragma once
 #include "AST.h"
+#include <map>
 #include <memory>
 
 template <class T>
@@ -16,3 +17,4 @@ std::unique_ptr<PrototypeAST> ParsePrototype();
 std::unique_ptr<FunctionAST> ParseDefinition();
 std::unique_ptr<PrototypeAST> ParseExtern();
 std::unique_ptr<FunctionAST> ParseTopLevelExpr();
+extern std::map<char, int> BinopPrecedence;

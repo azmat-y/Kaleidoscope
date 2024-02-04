@@ -133,7 +133,7 @@ std::unique_ptr<ExprAST> ParsePrimary() {
   }
 }
 
-static std::map<char, int> BinopPrecedence {
+std::map<char, int> BinopPrecedence {
   {'<', 10},
   {'>', 10},
   {'-', 20},
