@@ -20,7 +20,12 @@ enum Token {
 
   // `for` loops
   tok_for = -9,
-  tok_in = -10
+  tok_in = -10,
+
+  // for  operators
+  tok_binary = -11,
+  tok_unary = -12
+
 };
 
 extern std::string IdentifierStr;
