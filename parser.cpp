@@ -304,3 +304,19 @@ std::unique_ptr<ExprAST> ParseIfExpr() {
 
   return std::make_unique<IfExprAST>(std::move(Cond), std::move(Then), std::move(Else));
 }
+
+// unary
+// ::= primary
+// ::= '!' unary
+std::unique_ptr<ExprAST> ParseUnary() {
+  // if CurTok is not an operator then it must be an operator
+  if (!isascii(CurTok) || CurTok == '(' || CurTok == ',')
+    return ParsePrimary();
+
+  // if this is a unary operator then parse it
+  int Opc = CurTok;
+  getNextToken();
+  if (auto Operand = ParsePrimary())
+    return std::make_unique<UnarExprAST>(Opc, std::move(Operand));
+  return nullptr;
+}
