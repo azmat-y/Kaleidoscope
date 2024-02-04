@@ -215,7 +215,7 @@ Value *IfExprAST::codegen() {
   Value *ElseV = m_Else->codegen();
   if (!ElseV)
     return nullptr;
-  Builder->CreateBr(ElseBB);
+  Builder->CreateBr(MergeBB);
   ElseBB = Builder->GetInsertBlock();
 
   // emit merge block
@@ -395,7 +395,7 @@ Value *UnaryExprAST::codegen() {
   if (!OperandV)
     return nullptr;
 
-  Function *F = getFunction(std::string("Unary") + m_Opcode);
+  Function *F = getFunction(std::string("unary") + m_Opcode);
   if (!F)
     return LogErrorV("Unknown unary operator");
   return Builder->CreateCall(F, OperandV, "unop");
