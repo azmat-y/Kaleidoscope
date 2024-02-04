@@ -390,7 +390,7 @@ void HandleTopLevelExpr() {
   }
 }
 
-Value *UnaryExprAST::codgen() {
+Value *UnaryExprAST::codegen() {
   Value *OperandV = m_Operand->codegen();
   if (!OperandV)
     return nullptr;
