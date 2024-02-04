@@ -330,6 +330,6 @@ std::unique_ptr<ExprAST> ParseUnary() {
   int Opc = CurTok;
   getNextToken();
   if (auto Operand = ParsePrimary())
-    return std::make_unique<UnarExprAST>(Opc, std::move(Operand));
+    return std::make_unique<UnaryExprAST>(Opc, std::move(Operand));
   return nullptr;
 }
