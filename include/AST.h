@@ -128,12 +128,12 @@ public:
   Value *codegen() override;
 };
 
-class UnarExprAST : public ExprAST {
+class UnaryExprAST : public ExprAST {
   char m_Opcode;
   std::unique_ptr<ExprAST> m_Operand;
 
 public:
-  UnarExprAST(char Opcode, std::unique_ptr<ExprAST> Operand)
+  UnaryExprAST(char Opcode, std::unique_ptr<ExprAST> Operand)
   : m_Opcode(Opcode), m_Operand(std::move(Operand)) {}
 
   Value *codegen() override;
