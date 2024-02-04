@@ -1,5 +1,6 @@
 #include "include/AST.h"
 #include "include/lexer.h"
+#include <cctype>
 #include <cstdio>
 #include <llvm/IR/Value.h>
 #include <memory>
@@ -14,6 +15,7 @@ std::unique_ptr<T> LogError(const char *Str) {
 }
 
 std::unique_ptr<ExprAST> ParseExpression();
+std::unique_ptr<ExprAST> ParseUnary();
 
 // parenexpr := '(' expression ')'
 std::unique_ptr<ExprAST> ParseParenExpr() {
@@ -132,7 +134,7 @@ std::unique_ptr<ExprAST> ParsePrimary() {
   }
 }
 
-static std::map<char, int> BinopPrecedence {
+std::map<char, int> BinopPrecedence {
   {'<', 10},
   {'>', 10},
   {'-', 20},
@@ -157,7 +159,7 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
 
 //   expression := primary [binoprhs]
 std::unique_ptr<ExprAST> ParseExpression() {
-  auto LHS = ParsePrimary();
+  auto LHS = ParseUnary();
   if (!LHS)
     return nullptr;
   return ParseBinOpRHS(0, std::move(LHS));
@@ -177,7 +179,8 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
     int Binop = CurTok;
     getNextToken(); // eat binop
 
-    auto RHS =  ParsePrimary();
+    // Parse the Unary expression after binar operator
+    auto RHS =  ParseUnary();
     if (!RHS)
       return nullptr;
 
@@ -196,11 +199,48 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
   := id '(' [id] ')'
  */
 std::unique_ptr<PrototypeAST> ParsePrototype() {
-  if (CurTok != tok_identifier)
-    return LogError<PrototypeAST>("Expected function name in prototype");
+  std::string FnName;
 
-  std::string FnName = IdentifierStr;
-  getNextToken(); // eat funcion name
+  unsigned Kind = 0; // 0 = identifer, 1 = unary, 2 = binary
+  unsigned BinaryPrecedence = 30;
+  switch (CurTok) {
+  default:
+    return LogError<PrototypeAST>("Expected function name in prototyp");
+  case tok_identifier:
+    FnName = IdentifierStr;
+    Kind = 0;
+    getNextToken(); // consume identifer
+    break;
+
+  case tok_unary:
+    getNextToken(); // consume keyword
+    if (!isascii(CurTok))
+      return LogError<PrototypeAST>("Expected unary operator");
+    FnName = "unary";
+    FnName += (char)CurTok;
+    Kind = 1;
+    getNextToken(); // consume Op
+    break;
+
+  case tok_binary:
+    getNextToken(); // consume keyword
+    if (!isascii(CurTok))
+      return LogError<PrototypeAST>("Expected binary operator");
+    FnName = "binary";
+    FnName += (char)CurTok;
+    Kind = 2;
+    getNextToken(); // consume operator
+
+    // read precedence if present
+    if (CurTok == tok_number) {
+      if (NumVal < 1 || NumVal > 100)
+	return LogError<PrototypeAST>("Invalid precedence: must be betweeen 1..100");
+      BinaryPrecedence = (unsigned)NumVal;
+      getNextToken(); // consume the precedence
+    }
+    break;
+  }
+
   if (CurTok != '(')
     return LogError<PrototypeAST>("Expected '(' in prototype");
 
@@ -209,11 +249,17 @@ std::unique_ptr<PrototypeAST> ParsePrototype() {
   while (getNextToken() == tok_identifier)
     ArgNames.push_back(IdentifierStr);
   if (CurTok != ')')
-    return LogError<PrototypeAST>("Expected '(' in prototype");
+    return LogError<PrototypeAST>("Expected ')' in prototype");
 
   // succesfull parsing
   getNextToken(); // eat )
-  return std::make_unique<PrototypeAST>(FnName, std::move(ArgNames));
+
+  // verify right number of names for operator
+  if (Kind && ArgNames.size() != Kind)
+    return LogError<PrototypeAST>("Invalid number of operands for operator");
+
+  return std::make_unique<PrototypeAST>(FnName, std::move(ArgNames), Kind != 0,
+					BinaryPrecedence);
 }
 
 // definition := 'def' prototype expression
@@ -270,4 +316,20 @@ std::unique_ptr<ExprAST> ParseIfExpr() {
     return nullptr;
 
   return std::make_unique<IfExprAST>(std::move(Cond), std::move(Then), std::move(Else));
+}
+
+// unary
+// ::= primary
+// ::= '!' unary
+std::unique_ptr<ExprAST> ParseUnary() {
+  // if CurTok is not an operator then it must be an operator
+  if (!isascii(CurTok) || CurTok == '(' || CurTok == ',')
+    return ParsePrimary();
+
+  // if this is a unary operator then parse it
+  int Opc = CurTok;
+  getNextToken();
+  if (auto Operand = ParsePrimary())
+    return std::make_unique<UnaryExprAST>(Opc, std::move(Operand));
+  return nullptr;
 }

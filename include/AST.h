@@ -10,6 +10,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
+#include <cassert>
 #include <memory>
 #include <string>
 
@@ -67,13 +68,27 @@ public:
 class PrototypeAST {
   std::string m_Name;
   std::vector<std::string> m_Args;
+  bool m_IsOperator;
+  unsigned m_Precedence;
 
 public:
-  PrototypeAST(const std::string &Name, std::vector<std::string> Args)
-    : m_Name(Name), m_Args(std::move(Args)) {}
+  PrototypeAST(const std::string &Name, std::vector<std::string> Args,
+	       bool IsOperator = false, unsigned Prec = 0)
+  : m_Name(Name), m_Args(std::move(Args)), m_IsOperator(IsOperator),
+  m_Precedence(Prec){}
 
   Function *codegen();
   const std::string &getName() const { return m_Name; }
+
+  bool isUnaryOp() const { return m_IsOperator && m_Args.size() == 1;}
+  bool isBinaryOp() const { return m_IsOperator && m_Args.size() == 2;}
+
+  char getOperatorName() const {
+    assert(isUnaryOp() || isBinaryOp());
+    return m_Name[m_Name.size() - 1];
+  }
+
+  unsigned getBianryPrecedence() const { return m_Precedence;}
 };
 
 // for *Function Definition*
@@ -109,6 +124,17 @@ public:
 	     std::unique_ptr<ExprAST> Body)
     : m_VarName(VarName), m_Start(std::move(Start)), m_End(std::move(End)),
       m_Step(std::move(Step)), m_Body(std::move(Body)) {}
+
+  Value *codegen() override;
+};
+
+class UnaryExprAST : public ExprAST {
+  char m_Opcode;
+  std::unique_ptr<ExprAST> m_Operand;
+
+public:
+  UnaryExprAST(char Opcode, std::unique_ptr<ExprAST> Operand)
+  : m_Opcode(Opcode), m_Operand(std::move(Operand)) {}
 
   Value *codegen() override;
 };

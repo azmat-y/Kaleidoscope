@@ -7,6 +7,7 @@
 #include "include/AST.h"
 #include "include/parser.h"
 #include "include/lexer.h"
+#include <cassert>
 #include <cstdio>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
@@ -91,8 +92,15 @@ Value *BinaryExprAST::codegen() {
     return Builder->CreateUIToFP(L, Type::getDoubleTy(*TheContext),
 				  "booltmp");
   default:
-    return LogErrorV("invalid binary operator");
+    break;
   }
+  // if it was not a builtin operator then it was user defined
+  // Emit a call to it
+  Function *F = getFunction(std::string("binary")+m_Op);
+  assert(F && "binary operator not found");
+
+  Value *Ops[2] = { L, R };
+  return Builder->CreateCall(F, Ops, "binop");
 }
 
 Value *CallExprAST::codegen() {
@@ -139,6 +147,11 @@ Function *FunctionAST::codegen() {
   Function *TheFunction = getFunction(P.getName());
   if (!TheFunction)
     return nullptr;
+
+  // if this is an operator then register it in
+  // precedence table
+  if (P.isBinaryOp())
+    BinopPrecedence[P.getOperatorName()] = P.getBianryPrecedence();
 
   // now that we've checked that funnction body is empty
   BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", TheFunction);
@@ -202,7 +215,7 @@ Value *IfExprAST::codegen() {
   Value *ElseV = m_Else->codegen();
   if (!ElseV)
     return nullptr;
-  Builder->CreateBr(ElseBB);
+  Builder->CreateBr(MergeBB);
   ElseBB = Builder->GetInsertBlock();
 
   // emit merge block
@@ -375,4 +388,15 @@ void HandleTopLevelExpr() {
   } else {
     getNextToken();
   }
+}
+
+Value *UnaryExprAST::codegen() {
+  Value *OperandV = m_Operand->codegen();
+  if (!OperandV)
+    return nullptr;
+
+  Function *F = getFunction(std::string("unary") + m_Opcode);
+  if (!F)
+    return LogErrorV("Unknown unary operator");
+  return Builder->CreateCall(F, OperandV, "unop");
 }
