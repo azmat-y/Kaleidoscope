@@ -15,6 +15,7 @@ std::unique_ptr<T> LogError(const char *Str) {
 }
 
 std::unique_ptr<ExprAST> ParseExpression();
+std::unique_ptr<ExprAST> ParseUnary();
 
 // parenexpr := '(' expression ')'
 std::unique_ptr<ExprAST> ParseParenExpr() {
@@ -158,7 +159,7 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
 
 //   expression := primary [binoprhs]
 std::unique_ptr<ExprAST> ParseExpression() {
-  auto LHS = ParsePrimary();
+  auto LHS = ParseUnary();
   if (!LHS)
     return nullptr;
   return ParseBinOpRHS(0, std::move(LHS));
@@ -178,7 +179,8 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
     int Binop = CurTok;
     getNextToken(); // eat binop
 
-    auto RHS =  ParsePrimary();
+    // Parse the Unary expression after binar operator
+    auto RHS =  ParseUnary();
     if (!RHS)
       return nullptr;
 
@@ -209,6 +211,17 @@ std::unique_ptr<PrototypeAST> ParsePrototype() {
     Kind = 0;
     getNextToken(); // consume identifer
     break;
+
+  case tok_unary:
+    getNextToken(); // consume keyword
+    if (!isascii(CurTok))
+      return LogError<PrototypeAST>("Expected unary operator");
+    FnName = "unary";
+    FnName += (char)CurTok;
+    Kind = 1;
+    getNextToken(); // consume Op
+    break;
+
   case tok_binary:
     getNextToken(); // consume keyword
     if (!isascii(CurTok))
