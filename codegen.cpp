@@ -389,3 +389,14 @@ void HandleTopLevelExpr() {
     getNextToken();
   }
 }
+
+Value *UnaryExprAST::codgen() {
+  Value *OperandV = m_Operand->codegen();
+  if (!OperandV)
+    return nullptr;
+
+  Function *F = getFunction(std::string("Unary") + m_Opcode);
+  if (!F)
+    return LogErrorV("Unknown unary operator");
+  return Builder->CreateCall(F, OperandV, "unop");
+}
