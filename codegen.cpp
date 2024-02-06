@@ -28,7 +28,7 @@ using namespace llvm::orc;
 static std::unique_ptr<LLVMContext> TheContext;
 static std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
-static std::map<std::string, Value *> NamedValues;
+static std::map<std::string, AllocaInst*> NamedValues;
 static std::unique_ptr<FunctionPassManager> TheFPM;
 static std::unique_ptr<LoopAnalysisManager> TheLAM;
 static std::unique_ptr<FunctionAnalysisManager> TheFAM;
@@ -40,6 +40,13 @@ static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
 std::unique_ptr<KaleidoscopeJIT> TheJIT;
 ExitOnError ExitOnErr;
 
+AllocaInst *CreateEntryBlockAlloca(Function *TheFucntion,
+				   const std::string &VarName) {
+  IRBuilder<> TmpB(&TheFucntion->getEntryBlock(),
+                   TheFucntion->getEntryBlock().begin());
+  return TmpB.CreateAlloca(Type::getDoubleTy(*TheContext), nullptr,
+			   VarName);
+}
 
 Value *LogErrorV(const char *Str) {
   // LogError<ExprAST>(Str);
