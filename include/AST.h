@@ -13,6 +13,8 @@
 #include <cassert>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 // when we have a parser we will define & build an AST
@@ -136,6 +138,17 @@ class UnaryExprAST : public ExprAST {
 public:
   UnaryExprAST(char Opcode, std::unique_ptr<ExprAST> Operand)
   : m_Opcode(Opcode), m_Operand(std::move(Operand)) {}
+
+  Value *codegen() override;
+};
+
+class VarExprAST : public ExprAST {
+  std::vector<std::pair<std::string, std::unique_ptr<ExprAST>>> m_VarNames;
+  std::unique_ptr<ExprAST> m_Body;
+public:
+  VarExprAST(std::vector<std::pair<std::string, std::unique_ptr<ExprAST>>> VarNames,
+	     std::unique_ptr<ExprAST> Body)
+  : m_VarNames(std::move(VarNames)), m_Body(std::move(Body)) {}
 
   Value *codegen() override;
 };
