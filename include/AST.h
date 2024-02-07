@@ -38,6 +38,7 @@ class VariableExprAST : public ExprAST {
 public:
   VariableExprAST(const std::string &Name) : m_Name(Name) {}
   Value *codegen() override;
+  const std::string &getName() const { return m_Name; }
 };
 
 // for Binary Expressions like x+y
