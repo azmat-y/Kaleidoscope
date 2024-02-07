@@ -237,30 +237,29 @@ Value *IfExprAST::codegen() {
 }
 
 Value *ForExprAST::codegen() {
-  // Emit start code before variable is in scope
-  Value *StartVal = m_Start->codegen();
-  if (!StartVal)
-    return nullptr;
 
   // Make new basicblock for loop header, insertin after current
   // current block
   Function *TheFunction = Builder->GetInsertBlock()->getParent();
-  BasicBlock *PreHeaderBB = Builder->GetInsertBlock();
-  BasicBlock *LoopBB =
-    BasicBlock::Create(*TheContext, "loop", TheFunction);
+  // create an alloca for the variable in entry block
+  AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, m_VarName);
+  // Emit start code before variable is in scope
+  Value *StartVal = m_Start->codegen();
+  if (!StartVal)
+    return nullptr;
+  // Store the value into alloca
+  Builder->CreateStore(StartVal, Alloca);
+
+  BasicBlock *LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
   // explicit fall to current block to loop block
   Builder->CreateBr(LoopBB);
 
   Builder->SetInsertPoint(LoopBB);
-  // start PHInode with an entry for start
-  PHINode *Variable = Builder->CreatePHI(Type::getDoubleTy(*TheContext),
-					 2, m_VarName);
-  Variable->addIncoming(StartVal, PreHeaderBB);
 
   // withing the loop variable is defined equal to phi node
   // if it shadows an existing variable then restore it
-  Value *OldVal = NamedValues[m_VarName];
-  NamedValues[m_VarName] = Variable;
+  AllocaInst *OldVal = NamedValues[m_VarName];
+  NamedValues[m_VarName] = Alloca;
   // emit body of the loop
   if (!m_Body->codegen())
     return nullptr;
@@ -274,26 +273,26 @@ Value *ForExprAST::codegen() {
     // if no step specified then use 1
     StepVal = ConstantFP::get(*TheContext, APFloat(1.0));
   }
-  // add step value to looo variable
-  Value *NextVar = Builder->CreateFAdd(Variable, StepVal, "nextvar");
   // compute end condition
   Value *EndCond = m_End->codegen();
   if (!EndCond)
     return nullptr;
 
+  // add step value to looo variable
+  // reload, increament and restore the alloca
+  Value *CurVar = Builder->CreateLoad(Alloca->getAllocatedType(), Alloca,
+				      m_VarName.c_str());
+  Value *NextVar = Builder->CreateFAdd(CurVar, StepVal, "nextvar");
+  Builder->CreateStore(NextVar, Alloca);
   // convert condition to bool by comparing it to 0
   EndCond = Builder->CreateFCmpONE(
 				   EndCond, ConstantFP::get(*TheContext, APFloat(0.0)), "loopcond");
   // after loop body
-  BasicBlock *LoopEndBB = Builder->GetInsertBlock();
   BasicBlock *AfterBB =
     BasicBlock::Create(*TheContext, "afterloop", TheFunction);
   Builder->CreateCondBr(EndCond, LoopBB, AfterBB);
   // any new code will be inserted in AfterBB
   Builder->SetInsertPoint(AfterBB);
-
-  // add a new entry to the PHInode for the backedge
-  Variable->addIncoming(NextVar, LoopEndBB);
 
   // restore the shadowed variable
   if (OldVal)
