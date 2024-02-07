@@ -13,6 +13,8 @@
 #include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Analysis/CGSCCPassManager.h>
 #include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassInstrumentation.h>
 #include <llvm/Passes/PassBuilder.h>
@@ -433,4 +435,51 @@ Value *UnaryExprAST::codegen() {
   if (!F)
     return LogErrorV("Unknown unary operator");
   return Builder->CreateCall(F, OperandV, "unop");
+}
+
+Value *VarExprAST::codegen() {
+  std::vector<AllocaInst*> OldBindings;
+  Function *TheFunction = Builder->GetInsertBlock()->getParent();
+
+  // register all variables and emit their initializer
+  for (unsigned i = 0, e = m_VarNames.size(); i != e; ++i) {
+    const std::string &VarName = m_VarNames[i].first;
+    ExprAST *Init = m_VarNames[i].second.get();
+
+    // Emit the initializer before adding the variable to scope, this prevents
+    // the initializer from referencing the variable itself, and permits stuff
+    // like this:
+    //  var a = 1 in
+    //    var a = a in ...   # refers to outer 'a'.
+
+    Value *InitVal;
+    if (Init) {
+      InitVal = Init->codegen();
+      if (!InitVal)
+	return nullptr;
+    } else {
+      InitVal = ConstantFP::get(*TheContext, APFloat(0.0));
+    }
+    AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
+    Builder->CreateStore(InitVal, Alloca);
+
+    // remember the old bindings so that we can restore them
+    OldBindings.push_back(NamedValues[VarName]);
+
+    // remember the bindings
+    NamedValues[VarName] = Alloca;
+  }
+
+   // Codegen the body, now that all vars are in scope.
+  Value *BodyVal = m_Body->codegen();
+  if (!BodyVal)
+    return nullptr;
+
+  // Pop all our variables from scope.
+  for (unsigned i = 0, e = m_VarNames.size(); i != e; ++i)
+    NamedValues[m_VarNames[i].first] = OldBindings[i];
+
+  // Return the body computation.
+  return BodyVal;
+
 }
