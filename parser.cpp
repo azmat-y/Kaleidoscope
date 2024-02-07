@@ -2,10 +2,13 @@
 #include "include/lexer.h"
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <llvm/IR/Value.h>
 #include <memory>
 #include <map>
+#include <string>
 #include <utility>
+#include <vector>
 
 // helper function for logging error messages
 template <class T>
@@ -111,11 +114,54 @@ std::unique_ptr<ExprAST> ParseForExpr() {
 				      std::move(Body));
 }
 
+std::unique_ptr<ExprAST> ParseVarExpr() {
+  getNextToken(); // eat the var keyword
+  std::vector<std::pair<std::string, std::unique_ptr<ExprAST>>> VarNames;
+
+  // Check if there is atleast one variable is there
+  if (CurTok != tok_identifier)
+    return LogError<ExprAST>("expected identifier after var");
+
+  while (true) {
+    std::string Name = IdentifierStr;
+    getNextToken(); // eat identifer
+
+    // read the optional initializer
+    std::unique_ptr<ExprAST> Init;
+    if (CurTok == '=') {
+      getNextToken(); // eat assignment operator
+      Init = ParseExpression();
+      if (!Init) return nullptr;
+    }
+    VarNames.push_back(std::make_pair(Name, std::move(Init)));
+
+    // when reach end of var list exit the loop
+    if (CurTok != ',') break;
+    getNextToken(); // eat ','
+
+    if (CurTok != tok_identifier)
+    return LogError<ExprAST>("expected identifier list after var");
+  }
+  // now we use an 'in'
+  if (CurTok != tok_in)
+    return LogError<ExprAST>("expected 'in' keyword after 'var'");
+  getNextToken(); // eat 'in'
+
+  auto Body = ParseExpression();
+  if (!Body)
+    return nullptr;
+  return std::make_unique<VarExprAST>(std::move(VarNames),
+                                      std::move(Body));
+}
+
 /*
   primary
   := identifierexpr
   := numberexpr
   := parenexpr
+  := ifexpr
+  := forexpr
+  := varexpr
  */
 std::unique_ptr<ExprAST> ParsePrimary() {
   switch (CurTok) {
@@ -131,6 +177,8 @@ std::unique_ptr<ExprAST> ParsePrimary() {
     return ParseIfExpr();
   case tok_for:
     return ParseForExpr();
+  case tok_var:
+    return ParseVarExpr();
   }
 }
 
