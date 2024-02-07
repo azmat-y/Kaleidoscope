@@ -188,8 +188,14 @@ Function *FunctionAST::codegen() {
 
   // record fun arguments in Namedvalues
   NamedValues.clear();
-  for (auto &Arg : TheFunction->args())
-    NamedValues[std::string(Arg.getName())] = &Arg;
+  for (auto &Arg : TheFunction->args()){
+    // create an Alloca for this variable
+    AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
+   // Store the initial value into the alloca.
+    Builder->CreateStore(&Arg, Alloca);
+
+    NamedValues[std::string(Arg.getName())] = Alloca;
+  }
 
   if (Value *RetVal = m_Body->codegen()) {
     // finish the function
