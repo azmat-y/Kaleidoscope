@@ -13,6 +13,8 @@
 #include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Analysis/CGSCCPassManager.h>
 #include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassInstrumentation.h>
 #include <llvm/Passes/PassBuilder.h>
@@ -28,7 +30,7 @@ using namespace llvm::orc;
 static std::unique_ptr<LLVMContext> TheContext;
 static std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
-static std::map<std::string, Value *> NamedValues;
+static std::map<std::string, AllocaInst*> NamedValues;
 static std::unique_ptr<FunctionPassManager> TheFPM;
 static std::unique_ptr<LoopAnalysisManager> TheLAM;
 static std::unique_ptr<FunctionAnalysisManager> TheFAM;
@@ -40,6 +42,13 @@ static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
 std::unique_ptr<KaleidoscopeJIT> TheJIT;
 ExitOnError ExitOnErr;
 
+AllocaInst *CreateEntryBlockAlloca(Function *TheFucntion,
+				    StringRef VarName) {
+  IRBuilder<> TmpB(&TheFucntion->getEntryBlock(),
+                   TheFucntion->getEntryBlock().begin());
+  return TmpB.CreateAlloca(Type::getDoubleTy(*TheContext), nullptr,
+			   VarName);
+}
 
 Value *LogErrorV(const char *Str) {
   // LogError<ExprAST>(Str);
@@ -65,13 +74,35 @@ Value *NumberExprAST::codegen() {
 }
 
 Value *VariableExprAST::codegen() {
-  Value *V = NamedValues[m_Name];
-  if (!V)
+  AllocaInst *A = NamedValues[m_Name];
+  if (!A)
     return LogErrorV("Unknown Variable Name");
- return V;
+  return Builder->CreateLoad(A->getAllocatedType(), A, m_Name.c_str());
 }
 
 Value *BinaryExprAST::codegen() {
+
+  // Special edge case because we don't want LHS as an expression
+  if (m_Op == '=') {
+    // This assume we're building without RTTI because LLVM builds that way by
+    // default. If you build LLVM with RTTI this can be changed to a
+    // dynamic_cast for automatic error checking.
+    VariableExprAST *LHSE = static_cast<VariableExprAST*>(m_LHS.get());
+    if (!LHSE)
+      return LogErrorV("Unknown variable name");
+
+    // codegen the RHS
+    Value *Val = m_RHS->codegen();
+    if (!Val)
+      return nullptr;
+
+    // look up the name
+    Value *Variable = NamedValues[LHSE->getName()];
+    if (!Variable)
+      return LogErrorV("Unknown variable name");
+    Builder->CreateStore(Val, Variable);
+    return Val;
+  }
   Value *L = m_LHS->codegen();
   Value *R = m_RHS->codegen();
 
@@ -159,8 +190,15 @@ Function *FunctionAST::codegen() {
 
   // record fun arguments in Namedvalues
   NamedValues.clear();
-  for (auto &Arg : TheFunction->args())
-    NamedValues[std::string(Arg.getName())] = &Arg;
+  for (auto &Arg : TheFunction->args()){
+    // create an Alloca for this variable
+    // AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
+    AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
+   // Store the initial value into the alloca.
+    Builder->CreateStore(&Arg, Alloca);
+
+    NamedValues[std::string(Arg.getName())] = Alloca;
+  }
 
   if (Value *RetVal = m_Body->codegen()) {
     // finish the function
@@ -230,30 +268,29 @@ Value *IfExprAST::codegen() {
 }
 
 Value *ForExprAST::codegen() {
-  // Emit start code before variable is in scope
-  Value *StartVal = m_Start->codegen();
-  if (!StartVal)
-    return nullptr;
 
   // Make new basicblock for loop header, insertin after current
   // current block
   Function *TheFunction = Builder->GetInsertBlock()->getParent();
-  BasicBlock *PreHeaderBB = Builder->GetInsertBlock();
-  BasicBlock *LoopBB =
-    BasicBlock::Create(*TheContext, "loop", TheFunction);
+  // create an alloca for the variable in entry block
+  AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, m_VarName);
+  // Emit start code before variable is in scope
+  Value *StartVal = m_Start->codegen();
+  if (!StartVal)
+    return nullptr;
+  // Store the value into alloca
+  Builder->CreateStore(StartVal, Alloca);
+
+  BasicBlock *LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
   // explicit fall to current block to loop block
   Builder->CreateBr(LoopBB);
 
   Builder->SetInsertPoint(LoopBB);
-  // start PHInode with an entry for start
-  PHINode *Variable = Builder->CreatePHI(Type::getDoubleTy(*TheContext),
-					 2, m_VarName);
-  Variable->addIncoming(StartVal, PreHeaderBB);
 
   // withing the loop variable is defined equal to phi node
   // if it shadows an existing variable then restore it
-  Value *OldVal = NamedValues[m_VarName];
-  NamedValues[m_VarName] = Variable;
+  AllocaInst *OldVal = NamedValues[m_VarName];
+  NamedValues[m_VarName] = Alloca;
   // emit body of the loop
   if (!m_Body->codegen())
     return nullptr;
@@ -267,26 +304,26 @@ Value *ForExprAST::codegen() {
     // if no step specified then use 1
     StepVal = ConstantFP::get(*TheContext, APFloat(1.0));
   }
-  // add step value to looo variable
-  Value *NextVar = Builder->CreateFAdd(Variable, StepVal, "nextvar");
   // compute end condition
   Value *EndCond = m_End->codegen();
   if (!EndCond)
     return nullptr;
 
+  // add step value to looo variable
+  // reload, increament and restore the alloca
+  Value *CurVar = Builder->CreateLoad(Alloca->getAllocatedType(), Alloca,
+				      m_VarName.c_str());
+  Value *NextVar = Builder->CreateFAdd(CurVar, StepVal, "nextvar");
+  Builder->CreateStore(NextVar, Alloca);
   // convert condition to bool by comparing it to 0
   EndCond = Builder->CreateFCmpONE(
 				   EndCond, ConstantFP::get(*TheContext, APFloat(0.0)), "loopcond");
   // after loop body
-  BasicBlock *LoopEndBB = Builder->GetInsertBlock();
   BasicBlock *AfterBB =
     BasicBlock::Create(*TheContext, "afterloop", TheFunction);
   Builder->CreateCondBr(EndCond, LoopBB, AfterBB);
   // any new code will be inserted in AfterBB
   Builder->SetInsertPoint(AfterBB);
-
-  // add a new entry to the PHInode for the backedge
-  Variable->addIncoming(NextVar, LoopEndBB);
 
   // restore the shadowed variable
   if (OldVal)
@@ -399,4 +436,51 @@ Value *UnaryExprAST::codegen() {
   if (!F)
     return LogErrorV("Unknown unary operator");
   return Builder->CreateCall(F, OperandV, "unop");
+}
+
+Value *VarExprAST::codegen() {
+  std::vector<AllocaInst*> OldBindings;
+  Function *TheFunction = Builder->GetInsertBlock()->getParent();
+
+  // register all variables and emit their initializer
+  for (unsigned i = 0, e = m_VarNames.size(); i != e; ++i) {
+    const std::string &VarName = m_VarNames[i].first;
+    ExprAST *Init = m_VarNames[i].second.get();
+
+    // Emit the initializer before adding the variable to scope, this prevents
+    // the initializer from referencing the variable itself, and permits stuff
+    // like this:
+    //  var a = 1 in
+    //    var a = a in ...   # refers to outer 'a'.
+
+    Value *InitVal;
+    if (Init) {
+      InitVal = Init->codegen();
+      if (!InitVal)
+	return nullptr;
+    } else {
+      InitVal = ConstantFP::get(*TheContext, APFloat(0.0));
+    }
+    AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
+    Builder->CreateStore(InitVal, Alloca);
+
+    // remember the old bindings so that we can restore them
+    OldBindings.push_back(NamedValues[VarName]);
+
+    // remember the bindings
+    NamedValues[VarName] = Alloca;
+  }
+
+   // Codegen the body, now that all vars are in scope.
+  Value *BodyVal = m_Body->codegen();
+  if (!BodyVal)
+    return nullptr;
+
+  // Pop all our variables from scope.
+  for (unsigned i = 0, e = m_VarNames.size(); i != e; ++i)
+    NamedValues[m_VarNames[i].first] = OldBindings[i];
+
+  // Return the body computation.
+  return BodyVal;
+
 }

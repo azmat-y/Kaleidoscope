@@ -24,8 +24,10 @@ enum Token {
 
   // for  operators
   tok_binary = -11,
-  tok_unary = -12
+  tok_unary = -12,
 
+  // for local variables
+  tok_var = -13
 };
 
 extern std::string IdentifierStr;
