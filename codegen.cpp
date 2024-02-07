@@ -79,6 +79,28 @@ Value *VariableExprAST::codegen() {
 }
 
 Value *BinaryExprAST::codegen() {
+
+  // Special edge case because we don't want LHS as an expression
+  if (m_Op == '=') {
+    // This assume we're building without RTTI because LLVM builds that way by
+    // default. If you build LLVM with RTTI this can be changed to a
+    // dynamic_cast for automatic error checking.
+    VariableExprAST *LHSE = static_cast<VariableExprAST*>(m_LHS.get());
+    if (!LHSE)
+      return LogErrorV("Unknown variable name");
+
+    // codegen the RHS
+    Value *Val = m_RHS->codegen();
+    if (!Val)
+      return nullptr;
+
+    // look up the name
+    Value *Variable = NamedValues[LHSE->getName()];
+    if (!Variable)
+      return LogErrorV("Unknown variable name");
+    Builder->CreateStore(Val, Variable);
+    return Val;
+  }
   Value *L = m_LHS->codegen();
   Value *R = m_RHS->codegen();
 
