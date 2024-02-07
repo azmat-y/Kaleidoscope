@@ -43,7 +43,7 @@ std::unique_ptr<KaleidoscopeJIT> TheJIT;
 ExitOnError ExitOnErr;
 
 AllocaInst *CreateEntryBlockAlloca(Function *TheFucntion,
-				   const std::string &VarName) {
+				    StringRef VarName) {
   IRBuilder<> TmpB(&TheFucntion->getEntryBlock(),
                    TheFucntion->getEntryBlock().begin());
   return TmpB.CreateAlloca(Type::getDoubleTy(*TheContext), nullptr,
@@ -192,6 +192,7 @@ Function *FunctionAST::codegen() {
   NamedValues.clear();
   for (auto &Arg : TheFunction->args()){
     // create an Alloca for this variable
+    // AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
     AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
    // Store the initial value into the alloca.
     Builder->CreateStore(&Arg, Alloca);
