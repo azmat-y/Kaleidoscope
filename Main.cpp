@@ -3,9 +3,11 @@
 #include "llvm/Support/TargetSelect.h"
 #include "include/KaleidoscopeJIT.h"
 #include <cstdio>
+#include <llvm/MC/TargetRegistry.h>
 
 
 using namespace llvm;
+using namespace llvm::sys;
 
 /// top ::= definition | external | expression | ';'
 static void MainLoop() {
@@ -52,17 +54,30 @@ extern "C" DLLEXPORT double printd(double X) {
 }
 
 int main() {
-  InitializeNativeTarget();
-  InitializeNativeTargetAsmPrinter();
-  InitializeNativeTargetAsmParser();
 
   fprintf(stderr, "ready> ");
   getNextToken();
 
-  TheJIT = ExitOnErr(llvm::orc::KaleidoscopeJIT::Create());
   InitializeModuleAndManagers();
 
   MainLoop();
+
+  InitializeAllTargetInfos();
+  InitializeAllTargets();
+  InitializeAllTargetMCs();
+  InitializeAllAsmParsers();
+  InitializeAllAsmPrinters();
+
+  auto  TargetTriple = LLVMGetDefaultTargetTriple();
+
+  std::string Error;
+  auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
+  // print an error and exit if we could not find the requested
+  // target triple
+  if (!Target) {
+    errs() << Error;
+    return 1;
+  }
 
   return 0;
 }
