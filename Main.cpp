@@ -4,6 +4,8 @@
 #include "include/KaleidoscopeJIT.h"
 #include <cstdio>
 #include <llvm/MC/TargetRegistry.h>
+#include <llvm/Support/CodeGen.h>
+#include <llvm/Target/TargetOptions.h>
 
 
 using namespace llvm;
@@ -78,6 +80,15 @@ int main() {
     errs() << Error;
     return 1;
   }
+
+  auto CPU = "generic";
+  auto Features = "";
+
+  TargetOptions opt;
+  auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, Reloc::PIC_);
+
+  TheModule->setDataLayout(TargetMachine->createDataLayout());
+  TheModule->setTargetTriple(TargetTriple);
 
   return 0;
 }
