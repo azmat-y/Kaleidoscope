@@ -1,11 +1,14 @@
 #include "include/lexer.h"
 #include "include/codegen.h"
 #include "llvm/Support/TargetSelect.h"
-#include "include/KaleidoscopeJIT.h"
 #include <cstdio>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/CodeGen.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetOptions.h>
+#include <system_error>
 
 
 using namespace llvm;
@@ -71,7 +74,7 @@ int main() {
   InitializeAllAsmPrinters();
 
   auto  TargetTriple = LLVMGetDefaultTargetTriple();
-
+  TheModule->setTargetTriple(TargetTriple);
   std::string Error;
   auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
   // print an error and exit if we could not find the requested
@@ -88,7 +91,29 @@ int main() {
   auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, Reloc::PIC_);
 
   TheModule->setDataLayout(TargetMachine->createDataLayout());
-  TheModule->setTargetTriple(TargetTriple);
+
+  // now write our output file
+  auto Filename = "output.o";
+  std::error_code EC;
+  raw_fd_ostream dest(Filename, EC, sys::fs::OF_None);
+
+  if (EC) {
+    errs() << "Could not open file: " << EC.message();
+    return 1;
+  }
+
+  legacy::PassManager pass;
+  auto FileType = CodeGenFileType::CGFT_ObjectFile;
+
+  if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, FileType)) {
+    errs() << "TargetMachine can't emit a file of this type";
+    return 1;
+  }
+
+  pass.run(*TheModule);
+  dest.flush();
+
+  outs() << "Wrote " << Filename << "\n";
 
   return 0;
 }
