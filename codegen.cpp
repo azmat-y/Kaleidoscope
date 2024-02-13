@@ -39,7 +39,7 @@ static std::unique_ptr<ModuleAnalysisManager> TheMAM;
 static std::unique_ptr<PassInstrumentationCallbacks> ThePIC;
 static std::unique_ptr<StandardInstrumentations> TheSI;
 static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
-std::unique_ptr<KaleidoscopeJIT> TheJIT;
+// std::unique_ptr<KaleidoscopeJIT> TheJIT;
 ExitOnError ExitOnErr;
 
 AllocaInst *CreateEntryBlockAlloca(Function *TheFucntion,
@@ -340,9 +340,6 @@ void InitializeModuleAndManagers() {
   // open new context and module
   TheContext = std::make_unique<LLVMContext>();
   TheModule = std::make_unique<Module>("Kaliedoscope JIT", *TheContext);
-  TheModule->setDataLayout(TheJIT->getDataLayout());
-
-  // create a new builder for module
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
 
   // create a new pass and analysis managers
@@ -380,9 +377,8 @@ void HandleDefinition() {
       fprintf(stderr, "Read a function definition\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
-      ExitOnErr(TheJIT->addModule(ThreadSafeModule(std::move(TheModule),
-						   std::move(TheContext))));
-      InitializeModuleAndManagers();
+//      ExitOnErr(TheJIT->addModule(ThreadSafeModule(std::move(TheModule),
+						   // std::move(TheContext))));
     }
   } else {
     getNextToken(); // for error recovery
@@ -404,24 +400,7 @@ void HandleExtern() {
 
 void HandleTopLevelExpr() {
   if (auto FnAST = ParseTopLevelExpr()) {
-    if (FnAST->codegen()) {
-      // create a Resouce Tracker to track JIT'd memory allocated to our anonymous
-      // expression so we free it after executing
-      auto RT = TheJIT->getMainJITDylib().createResourceTracker();
-      auto TSM = ThreadSafeModule(std::move(TheModule), std::move(TheContext));
-      ExitOnErr(TheJIT->addModule(std::move(TSM), RT));
-      InitializeModuleAndManagers();
-
-      // search JIT for __anon_expr symbol
-      auto ExprSymbol = ExitOnErr(TheJIT->lookup("__anon_expr"));
-
-      // get symbol address and cast it to right address i.e. double
-      double (*FP)() = ExprSymbol.getAddress().toPtr<double (*)()>();
-      fprintf(stderr, "Evaluated to %f\n", FP());
-
-      // delete resources
-      ExitOnErr(RT->remove());
-    }
+    FnAST->codegen();
   } else {
     getNextToken();
   }
