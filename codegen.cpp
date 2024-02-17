@@ -18,6 +18,7 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassInstrumentation.h>
 #include <llvm/Passes/PassBuilder.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/Reassociate.h>
@@ -205,10 +206,10 @@ Function *FunctionAST::codegen() {
     Builder->CreateRet(RetVal);
 
     // validate the generated code for consistency
-    verifyFunction(*TheFunction);
+    verifyFunction(*TheFunction, &llvm::errs());
 
     // run the optimizer on the function
-    TheFPM->run(*TheFunction, *TheFAM);
+    // TheFPM->run(*TheFunction, *TheFAM);
     return TheFunction;
   }
 
