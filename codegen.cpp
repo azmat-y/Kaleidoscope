@@ -68,10 +68,11 @@ Value *NumberExprAST::codegen() {
 }
 
 Value *VariableExprAST::codegen() {
-  AllocaInst *A = NamedValues[m_Name];
-  if (!A)
+  Value *V = NamedValues[m_Name];
+  if (!V)
     return LogErrorV("Unknown Variable Name");
-  return Builder->CreateLoad(A->getAllocatedType(), A, m_Name.c_str());
+  // return Builder->CreateLoad(V->getAllocatedType(), V, m_Name.c_str());
+  return Builder->CreateLoad(Type::getDoubleTy(*TheContext), V, m_Name.c_str());
 }
 
 Value *BinaryExprAST::codegen() {
@@ -124,7 +125,7 @@ Value *BinaryExprAST::codegen() {
   Function *F = getFunction(std::string("binary")+m_Op);
   assert(F && "binary operator not found");
 
-  Value *Ops[2] = { L, R };
+  Value *Ops[] = { L, R };
   return Builder->CreateCall(F, Ops, "binop");
 }
 
@@ -208,6 +209,9 @@ Function *FunctionAST::codegen() {
 
   /// reading erorr remove the function
   TheFunction->eraseFromParent();
+
+  if (P.isBinaryOp())
+    BinopPrecedence.erase(P.getOperatorName());
   return nullptr;
 }
 
@@ -305,7 +309,7 @@ Value *ForExprAST::codegen() {
 
   // add step value to looo variable
   // reload, increament and restore the alloca
-  Value *CurVar = Builder->CreateLoad(Alloca->getAllocatedType(), Alloca,
+  Value *CurVar = Builder->CreateLoad(Type::getDoubleTy(*TheContext), Alloca,
 				      m_VarName.c_str());
   Value *NextVar = Builder->CreateFAdd(CurVar, StepVal, "nextvar");
   Builder->CreateStore(NextVar, Alloca);
