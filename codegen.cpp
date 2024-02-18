@@ -32,13 +32,6 @@ std::unique_ptr<Module> TheModule;
 static std::unique_ptr<LLVMContext> TheContext;
 static std::unique_ptr<IRBuilder<>> Builder;
 static std::map<std::string, AllocaInst*> NamedValues;
-static std::unique_ptr<FunctionPassManager> TheFPM;
-static std::unique_ptr<LoopAnalysisManager> TheLAM;
-static std::unique_ptr<FunctionAnalysisManager> TheFAM;
-static std::unique_ptr<CGSCCAnalysisManager> TheCGAM;
-static std::unique_ptr<ModuleAnalysisManager> TheMAM;
-static std::unique_ptr<PassInstrumentationCallbacks> ThePIC;
-static std::unique_ptr<StandardInstrumentations> TheSI;
 static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
 // std::unique_ptr<KaleidoscopeJIT> TheJIT;
 ExitOnError ExitOnErr;
@@ -342,32 +335,6 @@ void InitializeModuleAndManagers() {
   TheContext = std::make_unique<LLVMContext>();
   TheModule = std::make_unique<Module>("Kaliedoscope JIT", *TheContext);
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
-
-  // create a new pass and analysis managers
-  TheFPM = std::make_unique<FunctionPassManager>();
-  TheLAM = std::make_unique<LoopAnalysisManager>();
-  TheFAM = std::make_unique<FunctionAnalysisManager>();
-  TheCGAM = std::make_unique<CGSCCAnalysisManager>();
-  TheMAM = std::make_unique<ModuleAnalysisManager>();
-  ThePIC = std::make_unique<PassInstrumentationCallbacks>();
-  TheSI = std::make_unique<StandardInstrumentations>(*TheContext, true); // debugging logging
-
-  TheSI->registerCallbacks(*ThePIC, TheMAM.get());
-  // add transform passes and do simple optimizations
-
-  TheFPM->addPass(InstCombinePass());
-  TheFPM->addPass(ReassociatePass());
-
-  // eliminate subexpression
-  TheFPM->addPass(GVNPass());
-
-  // simplify control flow graph
-  TheFPM->addPass(SimplifyCFGPass());
-
-  PassBuilder PB;
-  PB.registerModuleAnalyses(*TheMAM);
-  PB.registerFunctionAnalyses(*TheFAM);
-  PB.crossRegisterProxies(*TheLAM, *TheFAM, *TheCGAM, *TheMAM);
 }
 
 
