@@ -1,9 +1,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/PassManager.h"
 #include "llvm/Passes/StandardInstrumentations.h"
-#include "include/KaleidoscopeJIT.h"
 #include "include/AST.h"
 #include "include/parser.h"
 #include "include/lexer.h"
@@ -23,6 +21,12 @@
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/Reassociate.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
+#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/LLVMContext.h"
 #include <map>
 
 using namespace llvm;
@@ -337,7 +341,7 @@ Value *ForExprAST::codegen() {
 void InitializeModuleAndManagers() {
   // open new context and module
   TheContext = std::make_unique<LLVMContext>();
-  TheModule = std::make_unique<Module>("Kaliedoscope JIT", *TheContext);
+  TheModule = std::make_unique<Module>("my cool jit", *TheContext);
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
 }
 
@@ -349,8 +353,6 @@ void HandleDefinition() {
       fprintf(stderr, "Read a function definition\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
-//      ExitOnErr(TheJIT->addModule(ThreadSafeModule(std::move(TheModule),
-						   // std::move(TheContext))));
     }
   } else {
     getNextToken(); // for error recovery

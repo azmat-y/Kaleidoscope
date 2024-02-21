@@ -2,12 +2,14 @@
 #include "include/codegen.h"
 #include "llvm/Support/TargetSelect.h"
 #include <cstdio>
+#include <llvm-c/TargetMachine.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/CodeGen.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetOptions.h>
+#include <llvm/Target/TargetMachine.h>
 #include <system_error>
 
 
