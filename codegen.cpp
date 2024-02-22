@@ -5,7 +5,7 @@
 #include "include/AST.h"
 #include "include/parser.h"
 #include "include/lexer.h"
-#include <cassert>
+#include "include/codegen.h"
 #include <cstdio>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
@@ -28,6 +28,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/LLVMContext.h"
 #include <map>
+#include <memory>
 
 using namespace llvm;
 using namespace llvm::orc;
