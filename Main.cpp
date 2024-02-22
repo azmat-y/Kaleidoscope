@@ -1,6 +1,7 @@
 #include "include/lexer.h"
 #include "include/codegen.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm-c/Core.h"
 #include <cstdio>
 #include <llvm-c/TargetMachine.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -116,5 +117,6 @@ int main() {
 
   outs() << "Wrote " << Filename << "\n";
 
+  LLVMDisposeMessage(TargetTriple);
   return 0;
 }
