@@ -1,5 +1,6 @@
 #include "include/AST.h"
 #include "include/lexer.h"
+#include "include/parser.h"
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
