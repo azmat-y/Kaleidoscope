@@ -1,13 +1,11 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/PassManager.h"
 #include "llvm/Passes/StandardInstrumentations.h"
-#include "include/KaleidoscopeJIT.h"
 #include "include/AST.h"
 #include "include/parser.h"
 #include "include/lexer.h"
-#include <cassert>
+#include "include/codegen.h"
 #include <cstdio>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
@@ -18,28 +16,29 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassInstrumentation.h>
 #include <llvm/Passes/PassBuilder.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/Reassociate.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
+#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/LLVMContext.h"
 #include <map>
+#include <memory>
 
 using namespace llvm;
 using namespace llvm::orc;
 
+std::unique_ptr<Module> TheModule;
 static std::unique_ptr<LLVMContext> TheContext;
-static std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
 static std::map<std::string, AllocaInst*> NamedValues;
-static std::unique_ptr<FunctionPassManager> TheFPM;
-static std::unique_ptr<LoopAnalysisManager> TheLAM;
-static std::unique_ptr<FunctionAnalysisManager> TheFAM;
-static std::unique_ptr<CGSCCAnalysisManager> TheCGAM;
-static std::unique_ptr<ModuleAnalysisManager> TheMAM;
-static std::unique_ptr<PassInstrumentationCallbacks> ThePIC;
-static std::unique_ptr<StandardInstrumentations> TheSI;
 static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
-std::unique_ptr<KaleidoscopeJIT> TheJIT;
+// std::unique_ptr<KaleidoscopeJIT> TheJIT;
 ExitOnError ExitOnErr;
 
 AllocaInst *CreateEntryBlockAlloca(Function *TheFucntion,
@@ -74,10 +73,11 @@ Value *NumberExprAST::codegen() {
 }
 
 Value *VariableExprAST::codegen() {
-  AllocaInst *A = NamedValues[m_Name];
-  if (!A)
+  Value *V = NamedValues[m_Name];
+  if (!V)
     return LogErrorV("Unknown Variable Name");
-  return Builder->CreateLoad(A->getAllocatedType(), A, m_Name.c_str());
+  // return Builder->CreateLoad(V->getAllocatedType(), V, m_Name.c_str());
+  return Builder->CreateLoad(Type::getDoubleTy(*TheContext), V, m_Name.c_str());
 }
 
 Value *BinaryExprAST::codegen() {
@@ -130,7 +130,7 @@ Value *BinaryExprAST::codegen() {
   Function *F = getFunction(std::string("binary")+m_Op);
   assert(F && "binary operator not found");
 
-  Value *Ops[2] = { L, R };
+  Value *Ops[] = { L, R };
   return Builder->CreateCall(F, Ops, "binop");
 }
 
@@ -205,15 +205,18 @@ Function *FunctionAST::codegen() {
     Builder->CreateRet(RetVal);
 
     // validate the generated code for consistency
-    verifyFunction(*TheFunction);
+    verifyFunction(*TheFunction, &llvm::errs());
 
     // run the optimizer on the function
-    TheFPM->run(*TheFunction, *TheFAM);
+    // TheFPM->run(*TheFunction, *TheFAM);
     return TheFunction;
   }
 
   /// reading erorr remove the function
   TheFunction->eraseFromParent();
+
+  if (P.isBinaryOp())
+    BinopPrecedence.erase(P.getOperatorName());
   return nullptr;
 }
 
@@ -311,7 +314,7 @@ Value *ForExprAST::codegen() {
 
   // add step value to looo variable
   // reload, increament and restore the alloca
-  Value *CurVar = Builder->CreateLoad(Alloca->getAllocatedType(), Alloca,
+  Value *CurVar = Builder->CreateLoad(Type::getDoubleTy(*TheContext), Alloca,
 				      m_VarName.c_str());
   Value *NextVar = Builder->CreateFAdd(CurVar, StepVal, "nextvar");
   Builder->CreateStore(NextVar, Alloca);
@@ -339,37 +342,8 @@ Value *ForExprAST::codegen() {
 void InitializeModuleAndManagers() {
   // open new context and module
   TheContext = std::make_unique<LLVMContext>();
-  TheModule = std::make_unique<Module>("Kaliedoscope JIT", *TheContext);
-  TheModule->setDataLayout(TheJIT->getDataLayout());
-
-  // create a new builder for module
+  TheModule = std::make_unique<Module>("my cool jit", *TheContext);
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
-
-  // create a new pass and analysis managers
-  TheFPM = std::make_unique<FunctionPassManager>();
-  TheLAM = std::make_unique<LoopAnalysisManager>();
-  TheFAM = std::make_unique<FunctionAnalysisManager>();
-  TheCGAM = std::make_unique<CGSCCAnalysisManager>();
-  TheMAM = std::make_unique<ModuleAnalysisManager>();
-  ThePIC = std::make_unique<PassInstrumentationCallbacks>();
-  TheSI = std::make_unique<StandardInstrumentations>(*TheContext, true); // debugging logging
-
-  TheSI->registerCallbacks(*ThePIC, TheMAM.get());
-  // add transform passes and do simple optimizations
-
-  TheFPM->addPass(InstCombinePass());
-  TheFPM->addPass(ReassociatePass());
-
-  // eliminate subexpression
-  TheFPM->addPass(GVNPass());
-
-  // simplify control flow graph
-  TheFPM->addPass(SimplifyCFGPass());
-
-  PassBuilder PB;
-  PB.registerModuleAnalyses(*TheMAM);
-  PB.registerFunctionAnalyses(*TheFAM);
-  PB.crossRegisterProxies(*TheLAM, *TheFAM, *TheCGAM, *TheMAM);
 }
 
 
@@ -380,9 +354,6 @@ void HandleDefinition() {
       fprintf(stderr, "Read a function definition\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
-      ExitOnErr(TheJIT->addModule(ThreadSafeModule(std::move(TheModule),
-						   std::move(TheContext))));
-      InitializeModuleAndManagers();
     }
   } else {
     getNextToken(); // for error recovery
@@ -404,24 +375,7 @@ void HandleExtern() {
 
 void HandleTopLevelExpr() {
   if (auto FnAST = ParseTopLevelExpr()) {
-    if (FnAST->codegen()) {
-      // create a Resouce Tracker to track JIT'd memory allocated to our anonymous
-      // expression so we free it after executing
-      auto RT = TheJIT->getMainJITDylib().createResourceTracker();
-      auto TSM = ThreadSafeModule(std::move(TheModule), std::move(TheContext));
-      ExitOnErr(TheJIT->addModule(std::move(TSM), RT));
-      InitializeModuleAndManagers();
-
-      // search JIT for __anon_expr symbol
-      auto ExprSymbol = ExitOnErr(TheJIT->lookup("__anon_expr"));
-
-      // get symbol address and cast it to right address i.e. double
-      double (*FP)() = ExprSymbol.getAddress().toPtr<double (*)()>();
-      fprintf(stderr, "Evaluated to %f\n", FP());
-
-      // delete resources
-      ExitOnErr(RT->remove());
-    }
+    FnAST->codegen();
   } else {
     getNextToken();
   }

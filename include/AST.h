@@ -43,6 +43,17 @@ public:
   const std::string &getName() const { return m_Name; }
 };
 
+class UnaryExprAST : public ExprAST {
+  char m_Opcode;
+  std::unique_ptr<ExprAST> m_Operand;
+
+public:
+  UnaryExprAST(char Opcode, std::unique_ptr<ExprAST> Operand)
+  : m_Opcode(Opcode), m_Operand(std::move(Operand)) {}
+
+  Value *codegen() override;
+};
+
 // for Binary Expressions like x+y
 class BinaryExprAST : public ExprAST {
   char m_Op;
@@ -127,17 +138,6 @@ public:
 	     std::unique_ptr<ExprAST> Body)
     : m_VarName(VarName), m_Start(std::move(Start)), m_End(std::move(End)),
       m_Step(std::move(Step)), m_Body(std::move(Body)) {}
-
-  Value *codegen() override;
-};
-
-class UnaryExprAST : public ExprAST {
-  char m_Opcode;
-  std::unique_ptr<ExprAST> m_Operand;
-
-public:
-  UnaryExprAST(char Opcode, std::unique_ptr<ExprAST> Operand)
-  : m_Opcode(Opcode), m_Operand(std::move(Operand)) {}
 
   Value *codegen() override;
 };
