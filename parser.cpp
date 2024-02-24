@@ -1,6 +1,5 @@
 #include "include/AST.h"
 #include "include/lexer.h"
-#include "include/parser.h"
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -27,8 +26,6 @@ std::unique_ptr<ExprAST> ParseParenExpr() {
   auto V = ParseExpression();
   if (!V)
     return nullptr;
-  if (CurTok != ')')
-    return LogError<ExprAST>("expected ')'");
   getNextToken(); // eat )
   return  V;
 }
@@ -130,7 +127,7 @@ std::unique_ptr<ExprAST> ParseVarExpr() {
     getNextToken(); // eat identifer
 
     // read the optional initializer
-    std::unique_ptr<ExprAST> Init = nullptr;
+    std::unique_ptr<ExprAST> Init;
     if (CurTok == '=') {
       getNextToken(); // eat assignment operator
       Init = ParseExpression();
@@ -310,7 +307,7 @@ std::unique_ptr<PrototypeAST> ParsePrototype() {
   if (Kind && ArgNames.size() != Kind)
     return LogError<PrototypeAST>("Invalid number of operands for operator");
 
-  return std::make_unique<PrototypeAST>(FnName, ArgNames, Kind != 0,
+  return std::make_unique<PrototypeAST>(FnName, std::move(ArgNames), Kind != 0,
 					BinaryPrecedence);
 }
 
