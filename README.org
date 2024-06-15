@@ -1,8 +1,10 @@
-#+TITLE: README
+#+OPTIONS: title:nil
 * Kaleidoscope
 Writing a compiler for a toy language Kaleidoscope by following the tutorial mentioned here [[https://llvm.org/docs/tutorial/MyFirstLanguageFrontend/index.html][Implementing Language with LLVM]]
 ** Why ?
 Compilers felt like a cheat code to me with how much efficient they are in generating native executables. To demystify it, I decided on building one to understand how one might work.
+** About
+It started as a REPL language and eventually became a scripting language that is interoperable with C++. I did not continue with further development of this project due to getting bogged down by the past mistakes be it not using unit tests or being inexperienced with using git, this taught me the importance of testing and how important version control is.
 ** Quickstart
 To build the program insure that you have cmake, clang++ and llvm-18 installed and in your path.
 #+begin_src bash
@@ -11,4 +13,33 @@ cd Kaleidoscope
 mkdir build
 cmake --preset=release # generate cmake files
 cmake --build build    # build the project
+#+end_src
+** Running
+First write the function in Kaleidoscope
+#+begin_src
+build/Main
+ready> def average(x y) (x + y) * 0.5;
+^D # Hit Ctrl-D
+wrote output.o
+#+end_src
+
+Write the driver code to link the functions above.
+#+begin_src C++
+// driver.cpp
+#include <iostream>
+
+extern "C" {
+    double average(double, double);
+}
+
+int main() {
+    std::cout << "average of 3.0 and 4.0: " << average(3.0, 4.0) << std::endl;
+}
+#+end_src
+
+Compile and run
+#+begin_src bash
+clang++ driver.cpp output.o -o out
+./out
+average of 3.0 and 4.0: 3.5
 #+end_src
