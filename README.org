@@ -4,7 +4,7 @@ Writing a compiler for a toy language Kaleidoscope by following the tutorial men
 ** Why ?
 Compilers felt like a cheat code to me with how much efficient they are in generating native executables. To demystify it, I decided on building one to understand how one might work.
 ** Quickstart
-To build the program insure that you have cmake and g++ installed and in your path.
+To build the program insure that you have cmake, clang++ and llvm-18 installed and in your path.
 #+begin_src bash
 git clone https://github.com/azmat-y/Kaleidoscope
 cd Kaleidoscope
