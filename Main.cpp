@@ -1,8 +1,10 @@
 #include "include/codegen.h"
 #include "include/lexer.h"
+#include "include/parser.h"
 #include "llvm-c/Core.h"
 #include "llvm/Support/TargetSelect.h"
 #include <cstdio>
+#include <iostream>
 #include <llvm-c/TargetMachine.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/MC/TargetRegistry.h>
@@ -11,6 +13,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
+#include <memory>
 
 using namespace llvm;
 using namespace llvm::sys;
@@ -59,7 +62,7 @@ extern "C" DLLEXPORT double printd(double X) {
 }
 
 int main() {
-
+  TheLexer = std::make_unique<Lexer>(std::cin);
   fprintf(stderr, "ready> ");
   getNextToken();
 

@@ -1,10 +1,10 @@
 #pragma once
 #include "AST.h"
+#include "lexer.h"
 #include <map>
 #include <memory>
 
-template <class T>
-std::unique_ptr<T> LogError(const char *Str);
+template <class T> std::unique_ptr<T> LogError(const char *Str);
 
 std::unique_ptr<ExprAST> ParseExpression();
 std::unique_ptr<ExprAST> ParseParenExpr();
@@ -18,3 +18,6 @@ std::unique_ptr<FunctionAST> ParseDefinition();
 std::unique_ptr<PrototypeAST> ParseExtern();
 std::unique_ptr<FunctionAST> ParseTopLevelExpr();
 extern std::map<char, int> BinopPrecedence;
+extern std::unique_ptr<Lexer> TheLexer;
+extern int CurTok;
+int getNextToken();

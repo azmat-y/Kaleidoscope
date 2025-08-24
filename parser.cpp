@@ -1,21 +1,30 @@
+#include "include/parser.h"
 #include "include/AST.h"
 #include "include/lexer.h"
-#include "include/parser.h"
-#include <cctype>
 #include <cstdio>
-#include <cstdlib>
 #include <llvm/IR/Value.h>
-#include <memory>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 // helper function for logging error messages
-template <class T>
-std::unique_ptr<T> LogError(const char *Str) {
+template <class T> std::unique_ptr<T> LogError(const char *Str) {
   fprintf(stderr, "Error :%s\n", Str);
   return nullptr;
+}
+
+std::unique_ptr<Lexer> TheLexer;
+int CurTok;
+std::string IdentifierStr;
+double NumVal;
+
+int getNextToken() {
+  CurTok = TheLexer->getToken();
+  IdentifierStr = TheLexer->getIdentifier();
+  NumVal = TheLexer->getNumVal();
+  return CurTok;
 }
 
 std::unique_ptr<ExprAST> ParseExpression();
@@ -30,7 +39,7 @@ std::unique_ptr<ExprAST> ParseParenExpr() {
   if (CurTok != ')')
     return LogError<ExprAST>("expected ')'");
   getNextToken(); // eat )
-  return  V;
+  return V;
 }
 
 // for parsing identifiers, funcitons calls
@@ -38,8 +47,8 @@ std::unique_ptr<ExprAST> ParseParenExpr() {
 //            := identifier '(' expression ')'
 std::unique_ptr<ExprAST> ParseIdentifierExpr() {
   std::string IdName = IdentifierStr;
-  getNextToken(); // eat Identifier
-  if (CurTok != '(')		// this implies it is a variable
+  getNextToken();    // eat Identifier
+  if (CurTok != '(') // this implies it is a variable
     return std::make_unique<VariableExprAST>(IdName);
 
   // when it is a function call
@@ -48,13 +57,13 @@ std::unique_ptr<ExprAST> ParseIdentifierExpr() {
   if (CurTok != ')') {
     while (true) {
       if (auto Arg = ParseExpression())
-	Args.push_back(std::move(Arg));
+        Args.push_back(std::move(Arg));
       else
-	return nullptr;
+        return nullptr;
       if (CurTok == ')')
-	break;
+        break;
       if (CurTok != ',')
-	return LogError<ExprAST>("Expected ')' or ',' in argument list");
+        return LogError<ExprAST>("Expected ')' or ',' in argument list");
       getNextToken();
     }
   }
@@ -112,9 +121,8 @@ std::unique_ptr<ExprAST> ParseForExpr() {
   if (!Body)
     return nullptr;
 
-  return std::make_unique<ForExprAST>(IdName, std::move(Start),
-				      std::move(End), std::move(Step),
-				      std::move(Body));
+  return std::make_unique<ForExprAST>(IdName, std::move(Start), std::move(End),
+                                      std::move(Step), std::move(Body));
 }
 
 std::unique_ptr<ExprAST> ParseVarExpr() {
@@ -134,16 +142,18 @@ std::unique_ptr<ExprAST> ParseVarExpr() {
     if (CurTok == '=') {
       getNextToken(); // eat assignment operator
       Init = ParseExpression();
-      if (!Init) return nullptr;
+      if (!Init)
+        return nullptr;
     }
     VarNames.push_back(std::make_pair(Name, std::move(Init)));
 
     // when reach end of var list exit the loop
-    if (CurTok != ',') break;
+    if (CurTok != ',')
+      break;
     getNextToken(); // eat ','
 
     if (CurTok != tok_identifier)
-    return LogError<ExprAST>("expected identifier list after var");
+      return LogError<ExprAST>("expected identifier list after var");
   }
   // now we use an 'in'
   if (CurTok != tok_in)
@@ -153,8 +163,7 @@ std::unique_ptr<ExprAST> ParseVarExpr() {
   auto Body = ParseExpression();
   if (!Body)
     return nullptr;
-  return std::make_unique<VarExprAST>(std::move(VarNames),
-                                      std::move(Body));
+  return std::make_unique<VarExprAST>(std::move(VarNames), std::move(Body));
 }
 
 /*
@@ -185,15 +194,8 @@ std::unique_ptr<ExprAST> ParsePrimary() {
   }
 }
 
-std::map<char, int> BinopPrecedence {
-  {'=', 2},
-  {'<', 10},
-  {'>', 10},
-  {'-', 20},
-  {'+', 20},
-  {'*', 40},
-  {'/', 40}
-};
+std::map<char, int> BinopPrecedence{{'=', 2},  {'<', 10}, {'>', 10}, {'-', 20},
+                                    {'+', 20}, {'*', 40}, {'/', 40}};
 
 // get token precedence
 static int GetTokPrecedence() {
@@ -202,12 +204,13 @@ static int GetTokPrecedence() {
 
   // make sure it is a declared Binop
   int TokPrec = BinopPrecedence[CurTok];
-  if (TokPrec <= 0) return -1;
+  if (TokPrec <= 0)
+    return -1;
   return TokPrec;
 }
 
 static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
-					      std::unique_ptr<ExprAST> LHS);
+                                              std::unique_ptr<ExprAST> LHS);
 
 //   expression := primary [binoprhs]
 std::unique_ptr<ExprAST> ParseExpression() {
@@ -219,7 +222,7 @@ std::unique_ptr<ExprAST> ParseExpression() {
 
 // binoprhs := ( op primary)
 static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
-					      std::unique_ptr<ExprAST> LHS) {
+                                              std::unique_ptr<ExprAST> LHS) {
   while (true) {
     int TokPrec = GetTokPrecedence();
 
@@ -232,17 +235,18 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
     getNextToken(); // eat binop
 
     // Parse the Unary expression after binar operator
-    auto RHS =  ParseUnary();
+    auto RHS = ParseUnary();
     if (!RHS)
       return nullptr;
 
     int NextPrec = GetTokPrecedence();
     if (TokPrec < NextPrec) {
-      RHS = ParseBinOpRHS(TokPrec+1, std::move(RHS));
+      RHS = ParseBinOpRHS(TokPrec + 1, std::move(RHS));
       if (!RHS)
-	return nullptr;
+        return nullptr;
     }
-    LHS = std::make_unique<BinaryExprAST>(Binop, std::move(LHS), std::move(RHS));
+    LHS =
+        std::make_unique<BinaryExprAST>(Binop, std::move(LHS), std::move(RHS));
   }
 }
 
@@ -286,7 +290,8 @@ std::unique_ptr<PrototypeAST> ParsePrototype() {
     // read precedence if present
     if (CurTok == tok_number) {
       if (NumVal < 1 || NumVal > 100)
-	return LogError<PrototypeAST>("Invalid precedence: must be betweeen 1..100");
+        return LogError<PrototypeAST>(
+            "Invalid precedence: must be betweeen 1..100");
       BinaryPrecedence = (unsigned)NumVal;
       getNextToken(); // consume the precedence
     }
@@ -311,7 +316,7 @@ std::unique_ptr<PrototypeAST> ParsePrototype() {
     return LogError<PrototypeAST>("Invalid number of operands for operator");
 
   return std::make_unique<PrototypeAST>(FnName, ArgNames, Kind != 0,
-					BinaryPrecedence);
+                                        BinaryPrecedence);
 }
 
 // definition := 'def' prototype expression
@@ -329,15 +334,16 @@ std::unique_ptr<FunctionAST> ParseDefinition() {
 
 // external := extern prototype
 std::unique_ptr<PrototypeAST> ParseExtern() {
-  getNextToken();		// eat extern
+  getNextToken(); // eat extern
   return ParsePrototype();
 }
 
 // toplevelexpr := expression
 std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
-  if (auto E = ParseExpression()){
+  if (auto E = ParseExpression()) {
     // make anonymous prototype
-    auto Proto = std::make_unique<PrototypeAST>("__anon_expr", std::vector<std::string>());
+    auto Proto = std::make_unique<PrototypeAST>("__anon_expr",
+                                                std::vector<std::string>());
     return std::make_unique<FunctionAST>(std::move(Proto), std::move(E));
   }
   return nullptr;
@@ -367,7 +373,8 @@ std::unique_ptr<ExprAST> ParseIfExpr() {
   if (!Else)
     return nullptr;
 
-  return std::make_unique<IfExprAST>(std::move(Cond), std::move(Then), std::move(Else));
+  return std::make_unique<IfExprAST>(std::move(Cond), std::move(Then),
+                                     std::move(Else));
 }
 
 // unary

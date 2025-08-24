@@ -1,22 +1,18 @@
 #include "include/lexer.h"
+#include <istream>
 #include <string>
 
+Lexer::Lexer(std::istream &in) : InputStream(in) { LastChar = ' '; }
 
-std::string IdentifierStr; // filed if tok_identifier
-double NumVal;		  // filed if tok_number
-
-// return the next token from std input
-int gettok() {
-  static int LastChar = ' ';
-
+int Lexer::getToken() {
   // skip whitespace
   while (isspace(LastChar))
-    LastChar = getchar();
+    LastChar = InputStream.get();
 
   // recognise keywords like "def", "extern" and Identifier [a-zA/0-Z0]
   if (isalpha(LastChar)) {
     IdentifierStr = LastChar;
-    while (isalnum(LastChar = getchar()))
+    while (isalnum(LastChar = InputStream.get()))
       IdentifierStr += LastChar;
 
     if (IdentifierStr == "def")
@@ -47,7 +43,7 @@ int gettok() {
     std::string NumStr;
     do {
       NumStr += LastChar;
-      LastChar = getchar();
+      LastChar = InputStream.get();
     } while (isdigit(LastChar) || LastChar == '.');
 
     NumVal = strtod(NumStr.c_str(), 0);
@@ -58,11 +54,11 @@ int gettok() {
   if (LastChar == '#') {
     // comment lasts until end of line
     do
-      LastChar = getchar();
+      LastChar = InputStream.get();
     while (LastChar != EOF && LastChar != '\n' && LastChar != '\r');
 
     if (LastChar != EOF)
-      return gettok();
+      return getToken();
   }
 
   // Incase input doesn't match any of the above cases
@@ -73,12 +69,6 @@ int gettok() {
 
   // handle for operator character like '+', '-' etc, just return ascii_value
   int ThisChar = LastChar;
-  LastChar = getchar(); 	// move the input seed
+  LastChar = InputStream.get(); // move the input seed
   return ThisChar;
-
-}
-
-int CurTok;
-int getNextToken() {
-  return CurTok = gettok();
 }

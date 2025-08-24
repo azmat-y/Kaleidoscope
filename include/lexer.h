@@ -1,6 +1,6 @@
 #pragma once
+#include <istream>
 #include <string>
-
 
 enum Token {
   tok_eof = -1,
@@ -30,10 +30,16 @@ enum Token {
   tok_var = -13
 };
 
-extern std::string IdentifierStr;
-extern double NumVal;
+class Lexer {
+public:
+  Lexer(std::istream &InputStream);
+  int getToken();
+  const std::string &getIdentifier() const { return IdentifierStr; }
+  double getNumVal() const { return NumVal; }
 
-int gettok();
-
-extern int CurTok;
-int getNextToken();
+private:
+  std::istream &InputStream;
+  std::string IdentifierStr;
+  double NumVal;
+  int LastChar = ' ';
+};
