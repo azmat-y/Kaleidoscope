@@ -1,15 +1,20 @@
+#include "include/codegen.h"
+#include "include/AST.h"
+#include "include/lexer.h"
+#include "include/parser.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
+#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/Passes/StandardInstrumentations.h"
-#include "include/AST.h"
-#include "include/parser.h"
-#include "include/lexer.h"
-#include "include/codegen.h"
 #include <cstdio>
 #include <llvm/ADT/APFloat.h>
-#include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Analysis/CGSCCPassManager.h>
+#include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
@@ -21,32 +26,24 @@
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/Reassociate.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
-#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
-#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
-#include "llvm/IR/DataLayout.h"
-#include "llvm/IR/LLVMContext.h"
 #include <map>
 #include <memory>
 
 using namespace llvm;
 using namespace llvm::orc;
 
-std::unique_ptr<Module> TheModule;
 std::unique_ptr<LLVMContext> TheContext;
+std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
-static std::map<std::string, AllocaInst*> NamedValues;
+static std::map<std::string, AllocaInst *> NamedValues;
 static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
 // std::unique_ptr<KaleidoscopeJIT> TheJIT;
 ExitOnError ExitOnErr;
 
-AllocaInst *CreateEntryBlockAlloca(Function *TheFucntion,
-				    StringRef VarName) {
+AllocaInst *CreateEntryBlockAlloca(Function *TheFucntion, StringRef VarName) {
   IRBuilder<> TmpB(&TheFucntion->getEntryBlock(),
                    TheFucntion->getEntryBlock().begin());
-  return TmpB.CreateAlloca(Type::getDoubleTy(*TheContext), nullptr,
-			   VarName);
+  return TmpB.CreateAlloca(Type::getDoubleTy(*TheContext), nullptr, VarName);
 }
 
 Value *LogErrorV(const char *Str) {
@@ -87,7 +84,7 @@ Value *BinaryExprAST::codegen() {
     // This assume we're building without RTTI because LLVM builds that way by
     // default. If you build LLVM with RTTI this can be changed to a
     // dynamic_cast for automatic error checking.
-    VariableExprAST *LHSE = static_cast<VariableExprAST*>(m_LHS.get());
+    VariableExprAST *LHSE = static_cast<VariableExprAST *>(m_LHS.get());
     if (!LHSE)
       return LogErrorV("Unknown variable name");
 
@@ -120,17 +117,16 @@ Value *BinaryExprAST::codegen() {
     return Builder->CreateFDiv(L, R, "divtmp");
   case '<':
     L = Builder->CreateFCmpULT(L, R, "cmptmp");
-    return Builder->CreateUIToFP(L, Type::getDoubleTy(*TheContext),
-				  "booltmp");
+    return Builder->CreateUIToFP(L, Type::getDoubleTy(*TheContext), "booltmp");
   default:
     break;
   }
   // if it was not a builtin operator then it was user defined
   // Emit a call to it
-  Function *F = getFunction(std::string("binary")+m_Op);
+  Function *F = getFunction(std::string("binary") + m_Op);
   assert(F && "binary operator not found");
 
-  Value *Ops[] = { L, R };
+  Value *Ops[] = {L, R};
   return Builder->CreateCall(F, Ops, "binop");
 }
 
@@ -144,8 +140,8 @@ Value *CallExprAST::codegen() {
   if (CalleeF->arg_size() != m_Args.size())
     return LogErrorV("Incorrect # of arguments");
 
-  std::vector<Value*> ArgsV;
-  for (unsigned i=0, e = m_Args.size(); i!=e; i++) {
+  std::vector<Value *> ArgsV;
+  for (unsigned i = 0, e = m_Args.size(); i != e; i++) {
     ArgsV.push_back(m_Args[i]->codegen());
     if (!ArgsV.back())
       return nullptr;
@@ -156,13 +152,13 @@ Value *CallExprAST::codegen() {
 Function *PrototypeAST::codegen() {
   // our language only supports doubles so functions will be of form
   // double(double, double ...)
-  std::vector<Type*> Doubles(m_Args.size(), Type::getDoubleTy(*TheContext));
+  std::vector<Type *> Doubles(m_Args.size(), Type::getDoubleTy(*TheContext));
 
   FunctionType *FT =
-    FunctionType::get(Type::getDoubleTy(*TheContext), Doubles, false);
+      FunctionType::get(Type::getDoubleTy(*TheContext), Doubles, false);
 
   Function *F =
-    Function::Create(FT, Function::ExternalLinkage, m_Name, TheModule.get());
+      Function::Create(FT, Function::ExternalLinkage, m_Name, TheModule.get());
 
   unsigned Idx = 0;
   for (auto &Arg : F->args())
@@ -190,11 +186,11 @@ Function *FunctionAST::codegen() {
 
   // record fun arguments in Namedvalues
   NamedValues.clear();
-  for (auto &Arg : TheFunction->args()){
+  for (auto &Arg : TheFunction->args()) {
     // create an Alloca for this variable
     // AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
     AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
-   // Store the initial value into the alloca.
+    // Store the initial value into the alloca.
     Builder->CreateStore(&Arg, Alloca);
 
     NamedValues[std::string(Arg.getName())] = Alloca;
@@ -228,13 +224,12 @@ Value *IfExprAST::codegen() {
     return nullptr;
 
   // convert condition to bool
-  CondV = Builder->CreateFCmpONE(CondV,
-				 ConstantFP::get(*TheContext, APFloat(0.0)), "ifcond");
+  CondV = Builder->CreateFCmpONE(
+      CondV, ConstantFP::get(*TheContext, APFloat(0.0)), "ifcond");
   Function *TheFunction = Builder->GetInsertBlock()->getParent();
 
   // create BasicBlock for then and else
-  BasicBlock *ThenBB =
-    BasicBlock::Create(*TheContext, "then", TheFunction);
+  BasicBlock *ThenBB = BasicBlock::Create(*TheContext, "then", TheFunction);
   BasicBlock *ElseBB = BasicBlock::Create(*TheContext, "else");
   BasicBlock *MergeBB = BasicBlock::Create(*TheContext, "ifcont");
 
@@ -262,8 +257,7 @@ Value *IfExprAST::codegen() {
   // emit merge block
   TheFunction->insert(TheFunction->end(), MergeBB);
   Builder->SetInsertPoint(MergeBB);
-  PHINode *PN =
-    Builder->CreatePHI(Type::getDoubleTy(*TheContext), 2, "iftmp");
+  PHINode *PN = Builder->CreatePHI(Type::getDoubleTy(*TheContext), 2, "iftmp");
   PN->addIncoming(ThenV, ThenBB);
   PN->addIncoming(ElseV, ElseBB);
 
@@ -315,15 +309,15 @@ Value *ForExprAST::codegen() {
   // add step value to looo variable
   // reload, increament and restore the alloca
   Value *CurVar = Builder->CreateLoad(Type::getDoubleTy(*TheContext), Alloca,
-				      m_VarName.c_str());
+                                      m_VarName.c_str());
   Value *NextVar = Builder->CreateFAdd(CurVar, StepVal, "nextvar");
   Builder->CreateStore(NextVar, Alloca);
   // convert condition to bool by comparing it to 0
   EndCond = Builder->CreateFCmpONE(
-				   EndCond, ConstantFP::get(*TheContext, APFloat(0.0)), "loopcond");
+      EndCond, ConstantFP::get(*TheContext, APFloat(0.0)), "loopcond");
   // after loop body
   BasicBlock *AfterBB =
-    BasicBlock::Create(*TheContext, "afterloop", TheFunction);
+      BasicBlock::Create(*TheContext, "afterloop", TheFunction);
   Builder->CreateCondBr(EndCond, LoopBB, AfterBB);
   // any new code will be inserted in AfterBB
   Builder->SetInsertPoint(AfterBB);
@@ -332,7 +326,7 @@ Value *ForExprAST::codegen() {
   if (OldVal)
     NamedValues[m_VarName] = OldVal;
   else
-   NamedValues.erase(m_VarName);
+    NamedValues.erase(m_VarName);
 
   // `for loop` expr always return 0
   return Constant::getNullValue(Type::getDoubleTy(*TheContext));
@@ -346,11 +340,10 @@ void InitializeModuleAndManagers() {
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
 }
 
-
 // for top level parsing
 void HandleDefinition() {
   if (auto FnAST = ParseDefinition()) {
-    if (auto *FnIR = FnAST->codegen()){
+    if (auto *FnIR = FnAST->codegen()) {
       fprintf(stderr, "Read a function definition\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
@@ -362,7 +355,7 @@ void HandleDefinition() {
 
 void HandleExtern() {
   if (auto ProtoAST = ParseExtern()) {
-    if (auto *FnIR = ProtoAST->codegen()){
+    if (auto *FnIR = ProtoAST->codegen()) {
       fprintf(stderr, "Read a function definition\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
@@ -393,7 +386,7 @@ Value *UnaryExprAST::codegen() {
 }
 
 Value *VarExprAST::codegen() {
-  std::vector<AllocaInst*> OldBindings;
+  std::vector<AllocaInst *> OldBindings;
   Function *TheFunction = Builder->GetInsertBlock()->getParent();
 
   // register all variables and emit their initializer
@@ -411,7 +404,7 @@ Value *VarExprAST::codegen() {
     if (Init) {
       InitVal = Init->codegen();
       if (!InitVal)
-	return nullptr;
+        return nullptr;
     } else {
       InitVal = ConstantFP::get(*TheContext, APFloat(0.0));
     }
@@ -425,7 +418,7 @@ Value *VarExprAST::codegen() {
     NamedValues[VarName] = Alloca;
   }
 
-   // Codegen the body, now that all vars are in scope.
+  // Codegen the body, now that all vars are in scope.
   Value *BodyVal = m_Body->codegen();
   if (!BodyVal)
     return nullptr;
@@ -436,5 +429,4 @@ Value *VarExprAST::codegen() {
 
   // Return the body computation.
   return BodyVal;
-
 }

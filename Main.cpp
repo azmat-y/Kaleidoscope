@@ -1,7 +1,7 @@
-#include "include/lexer.h"
 #include "include/codegen.h"
-#include "llvm/Support/TargetSelect.h"
+#include "include/lexer.h"
 #include "llvm-c/Core.h"
+#include "llvm/Support/TargetSelect.h"
 #include <cstdio>
 #include <llvm-c/TargetMachine.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -9,10 +9,8 @@
 #include <llvm/Support/CodeGen.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Target/TargetOptions.h>
 #include <llvm/Target/TargetMachine.h>
-#include <system_error>
-
+#include <llvm/Target/TargetOptions.h>
 
 using namespace llvm;
 using namespace llvm::sys;
@@ -24,7 +22,7 @@ static void MainLoop() {
     case tok_eof:
       return;
     case ';':
-      getNextToken();		// ignore top level semicolon
+      getNextToken(); // ignore top level semicolon
       break;
     case tok_def:
       HandleDefinition();
@@ -75,7 +73,7 @@ int main() {
   InitializeAllAsmParsers();
   InitializeAllAsmPrinters();
 
-  auto  TargetTriple = LLVMGetDefaultTargetTriple();
+  auto TargetTriple = LLVMGetDefaultTargetTriple();
   TheModule->setTargetTriple(TargetTriple);
   std::string Error;
   auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
@@ -90,7 +88,8 @@ int main() {
   auto Features = "";
 
   TargetOptions opt;
-  auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, Reloc::PIC_);
+  auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features,
+                                                   opt, Reloc::PIC_);
 
   TheModule->setDataLayout(TargetMachine->createDataLayout());
 
