@@ -1,6 +1,7 @@
-extern putchard(char);
+extern printd(x);
 
 def forTest(start end)
     for x = start, x < end in (
-    putchard(x)
+    printd(x)
 )
+forTest(1, 100)

@@ -71,11 +71,10 @@ Value *NumberExprAST::codegen() {
 }
 
 Value *VariableExprAST::codegen() {
-  Value *V = NamedValues[m_Name];
-  if (!V)
-    return LogErrorV("Unknown Variable Name");
-  // return Builder->CreateLoad(V->getAllocatedType(), V, m_Name.c_str());
-  return Builder->CreateLoad(Type::getDoubleTy(*TheContext), V, m_Name.c_str());
+  AllocaInst *A = NamedValues[m_Name];
+  if (!A)
+    return LogErrorV("Unkown variable name");
+  return Builder->CreateLoad(A->getAllocatedType(), A, m_Name.c_str());
 }
 
 Value *BinaryExprAST::codegen() {
