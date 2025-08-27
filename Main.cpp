@@ -4,8 +4,13 @@
 #include "llvm-c/Core.h"
 #include "llvm/Support/TargetSelect.h"
 #include <cstdio>
+#include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <llvm-c/TargetMachine.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/CodeGen.h>
@@ -14,6 +19,7 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 #include <memory>
+#include <string>
 
 using namespace llvm;
 using namespace llvm::sys;
@@ -39,36 +45,50 @@ static void MainLoop() {
   }
 }
 
-#ifdef _WIN32
-#define DLLEXPORT __declspec(dllexport)
-#else
-#define DLLEXPORT
-#endif
+int main(int argc, char **argv) {
+  if (argc < 2) {
+    errs() << "File not provided for compilation\n";
+    errs() << "Usage: kaleidoscope <file>\n";
+    return 1;
+  }
+  bool emitIR = false;
+  if (std::string(argv[1]) == "-emit-ir" && argc == 3)
+    emitIR = true;
 
-/*
-call to c functions from our language through forward declaration
- */
+  std::string File = (argc == 3) ? argv[2] : argv[1];
+  std::ifstream inf{File};
 
-/// putchard - putchar that takes a double and returns 0.
-extern "C" DLLEXPORT double putchard(double X) {
-  fputc((char)X, stderr);
-  return 0;
-}
+  if (!inf) {
+    errs() << "Could not open " << File << " \n";
+    return 1;
+  }
 
-/// printd - printf that takes a double prints it as "%f\n", returning 0.
-extern "C" DLLEXPORT double printd(double X) {
-  fprintf(stderr, "%f\n", X);
-  return 0;
-}
-
-int main() {
-  TheLexer = std::make_unique<Lexer>(std::cin);
-  fprintf(stderr, "ready> ");
+  TheLexer = std::make_unique<Lexer>(inf);
+  // fprintf(stderr, "ready> ");
   getNextToken();
-
   InitializeModuleAndManagers();
 
   MainLoop();
+
+  if (!TopLevelFunctions.empty()) {
+    llvm::FunctionType *MainFT =
+        llvm::FunctionType::get(Builder->getInt32Ty(), false);
+    llvm::Function *MainF = llvm::Function::Create(
+        MainFT, llvm::Function::ExternalLinkage, "main", TheModule.get());
+    llvm::BasicBlock *BB =
+        llvm::BasicBlock::Create(*TheContext, "entry", MainF);
+    Builder->SetInsertPoint(BB);
+
+    for (auto *Fn : TopLevelFunctions) {
+      Builder->CreateCall(Fn, {});
+    }
+    Builder->CreateRet(llvm::ConstantInt::get(*TheContext, llvm::APInt(32, 0)));
+  } else {
+    fprintf(stderr, "Warning: No top-level expressions to execute, main "
+                    "function will not be generated.\n");
+  }
+  if (emitIR)
+    TheModule->print(llvm::errs(), nullptr);
 
   InitializeAllTargetInfos();
   InitializeAllTargets();
@@ -117,8 +137,15 @@ int main() {
   pass.run(*TheModule);
   dest.flush();
 
-  outs() << "Wrote " << Filename << "\n";
+  // outs() << "Wrote " << Filename << "\n";
 
   LLVMDisposeMessage(TargetTriple);
+
+  std::string LinkerCmd = "clang++ output.o runtime.o";
+  int RetCode = system(LinkerCmd.c_str());
+  if (RetCode != 0) {
+    errs() << "Linking failed with exit code " << RetCode << '\n';
+    return 1;
+  }
   return 0;
 }

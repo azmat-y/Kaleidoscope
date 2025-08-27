@@ -342,8 +342,9 @@ std::unique_ptr<PrototypeAST> ParseExtern() {
 std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
   if (auto E = ParseExpression()) {
     // make anonymous prototype
-    auto Proto = std::make_unique<PrototypeAST>("__anon_expr",
-                                                std::vector<std::string>());
+    static int counter = 0;
+    auto Proto = std::make_unique<PrototypeAST>(
+        "__anon_expr" + std::to_string(counter++), std::vector<std::string>());
     return std::make_unique<FunctionAST>(std::move(Proto), std::move(E));
   }
   return nullptr;

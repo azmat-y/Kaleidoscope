@@ -1,1 +1,10 @@
-def average(x y) (x + y) * 0.5;
+extern printd(x);
+
+def average(x y)
+    (x + y) * 0.5;
+
+def add(x y)
+    x + y;
+
+printd(add(3, 100))
+printd(add(2, 43))

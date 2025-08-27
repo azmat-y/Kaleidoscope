@@ -34,7 +34,8 @@ using namespace llvm::orc;
 
 std::unique_ptr<LLVMContext> TheContext;
 std::unique_ptr<Module> TheModule;
-static std::unique_ptr<IRBuilder<>> Builder;
+std::vector<llvm::Function *> TopLevelFunctions;
+std::unique_ptr<IRBuilder<>> Builder;
 static std::map<std::string, AllocaInst *> NamedValues;
 static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
 // std::unique_ptr<KaleidoscopeJIT> TheJIT;
@@ -336,18 +337,14 @@ Value *ForExprAST::codegen() {
 void InitializeModuleAndManagers() {
   // open new context and module
   TheContext = std::make_unique<LLVMContext>();
-  TheModule = std::make_unique<Module>("my cool jit", *TheContext);
+  TheModule = std::make_unique<Module>("Kaleidoscope", *TheContext);
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
 }
 
 // for top level parsing
 void HandleDefinition() {
   if (auto FnAST = ParseDefinition()) {
-    if (auto *FnIR = FnAST->codegen()) {
-      fprintf(stderr, "Read a function definition\n");
-      FnIR->print(errs());
-      fprintf(stderr, "\n");
-    }
+    FnAST->codegen();
   } else {
     getNextToken(); // for error recovery
   }
@@ -355,12 +352,8 @@ void HandleDefinition() {
 
 void HandleExtern() {
   if (auto ProtoAST = ParseExtern()) {
-    if (auto *FnIR = ProtoAST->codegen()) {
-      fprintf(stderr, "Read a function definition\n");
-      FnIR->print(errs());
-      fprintf(stderr, "\n");
-      FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST);
-    }
+    ProtoAST->codegen();
+    FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST);
   } else {
     getNextToken(); // for error recovery
   }
@@ -368,7 +361,9 @@ void HandleExtern() {
 
 void HandleTopLevelExpr() {
   if (auto FnAST = ParseTopLevelExpr()) {
-    FnAST->codegen();
+    if (auto *F = FnAST->codegen()) {
+      TopLevelFunctions.push_back(F);
+    }
   } else {
     getNextToken();
   }
