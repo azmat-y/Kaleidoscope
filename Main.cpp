@@ -1,3 +1,4 @@
+#include "include/argparse.hpp"
 #include "include/codegen.h"
 #include "include/lexer.h"
 #include "include/parser.h"
@@ -46,23 +47,31 @@ static void MainLoop() {
 }
 
 int main(int argc, char **argv) {
-  if (argc < 2) {
-    errs() << "File not provided for compilation\n";
-    errs() << "Usage: kaleidoscope <file>\n";
+  argparse::ArgumentParser program("kaleidoscope");
+  program.add_description("AOT compiler for the Kaleidoscope language.");
+
+  program.add_argument("--emit-ir")
+      .help("Emit LLVM IR to stdout.")
+      .default_value(false)
+      .implicit_value(true);
+
+  program.add_argument("input_file").help("The input source file to compile.");
+
+  try {
+    program.parse_args(argc, argv);
+  } catch (const std::runtime_error &err) {
+    std::cerr << err.what() << std::endl;
+    std::cerr << program;
     return 1;
   }
-  bool emitIR = false;
-  if (std::string(argv[1]) == "-emit-ir" && argc == 3)
-    emitIR = true;
 
-  std::string File = (argc == 3) ? argv[2] : argv[1];
-  std::ifstream inf{File};
-
+  std::string InputFile = program.get<std::string>("input_file");
+  bool emitIR = program.get<bool>("--emit-ir");
+  std::ifstream inf{InputFile};
   if (!inf) {
-    errs() << "Could not open " << File << " \n";
+    std::cerr << "Error: Could not open file " << InputFile << std::endl;
     return 1;
   }
-
   TheLexer = std::make_unique<Lexer>(inf);
   // fprintf(stderr, "ready> ");
   getNextToken();
