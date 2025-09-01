@@ -1,8 +1,9 @@
 #pragma once
+#include "location.h"
 #include <istream>
 #include <string>
 
-enum Token {
+enum TokenType {
   tok_eof = -1,
 
   // command
@@ -30,16 +31,26 @@ enum Token {
   tok_var = -13
 };
 
+struct Token {
+  int Type = 0;
+  std::string StrVal = "";
+  double NumVal = 0.0;
+  SourceLocation Loc;
+};
+
 class Lexer {
 public:
   Lexer(std::istream &InputStream);
-  int getToken();
-  const std::string &getIdentifier() const { return IdentifierStr; }
-  double getNumVal() const { return NumVal; }
+  Token getToken();
+  // const std::string &getIdentifier() const { return IdentifierStr; }
+  // double getNumVal() const { return NumVal; }
+  SourceLocation getCurrentLocation() const { return CurrentLocation; }
 
 private:
   std::istream &InputStream;
-  std::string IdentifierStr;
-  double NumVal;
+  // std::string IdentifierStr;
+  // double NumVal;
   int LastChar = ' ';
+  SourceLocation CurrentLocation = {1, 0};
+  int advance();
 };

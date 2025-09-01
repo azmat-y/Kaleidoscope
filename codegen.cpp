@@ -20,6 +20,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassInstrumentation.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
@@ -47,9 +48,9 @@ AllocaInst *CreateEntryBlockAlloca(Function *TheFucntion, StringRef VarName) {
   return TmpB.CreateAlloca(Type::getDoubleTy(*TheContext), nullptr, VarName);
 }
 
-Value *LogErrorV(const char *Str) {
+Value *LogErrorV(const char *Str, SourceLocation Loc) {
   // LogError<ExprAST>(Str);
-  fprintf(stderr, "Error: %s\n", Str);
+  fprintf(stderr, "Error (Line %d, Col %d): %s\n", Loc.Line, Loc.Col, Str);
   return nullptr;
 }
 
@@ -73,7 +74,7 @@ Value *NumberExprAST::codegen() {
 Value *VariableExprAST::codegen() {
   AllocaInst *A = NamedValues[m_Name];
   if (!A)
-    return LogErrorV("Unkown variable name");
+    return LogErrorV("Unkown variable name", getLocation());
   return Builder->CreateLoad(A->getAllocatedType(), A, m_Name.c_str());
 }
 
@@ -86,7 +87,7 @@ Value *BinaryExprAST::codegen() {
     // dynamic_cast for automatic error checking.
     VariableExprAST *LHSE = static_cast<VariableExprAST *>(m_LHS.get());
     if (!LHSE)
-      return LogErrorV("Unknown variable name");
+      return LogErrorV("Unknown variable name", getLocation());
 
     // codegen the RHS
     Value *Val = m_RHS->codegen();
@@ -96,7 +97,7 @@ Value *BinaryExprAST::codegen() {
     // look up the name
     Value *Variable = NamedValues[LHSE->getName()];
     if (!Variable)
-      return LogErrorV("Unknown variable name");
+      return LogErrorV("Unknown variable name", getLocation());
     Builder->CreateStore(Val, Variable);
     return Val;
   }
@@ -134,11 +135,11 @@ Value *CallExprAST::codegen() {
   // lookup name in global module table
   Function *CalleeF = getFunction(m_Callee);
   if (!CalleeF)
-    return LogErrorV("Unknown Function refrenced");
+    return LogErrorV("Unknown Function refrenced", getLocation());
 
   // if arguments do not match
   if (CalleeF->arg_size() != m_Args.size())
-    return LogErrorV("Incorrect # of arguments");
+    return LogErrorV("Incorrect # of arguments", getLocation());
 
   std::vector<Value *> ArgsV;
   for (unsigned i = 0, e = m_Args.size(); i != e; i++) {
@@ -185,6 +186,8 @@ Function *FunctionAST::codegen() {
   Builder->SetInsertPoint(BB);
 
   // record fun arguments in Namedvalues
+  std::map<std::string, AllocaInst *> OldBindings;
+  OldBindings.swap(NamedValues);
   NamedValues.clear();
   for (auto &Arg : TheFunction->args()) {
     // create an Alloca for this variable
@@ -205,12 +208,13 @@ Function *FunctionAST::codegen() {
 
     // run the optimizer on the function
     // TheFPM->run(*TheFunction, *TheFAM);
+    NamedValues.swap(OldBindings);
     return TheFunction;
   }
 
   /// reading erorr remove the function
   TheFunction->eraseFromParent();
-
+  NamedValues.swap(OldBindings);
   if (P.isBinaryOp())
     BinopPrecedence.erase(P.getOperatorName());
   return nullptr;
@@ -375,7 +379,7 @@ Value *UnaryExprAST::codegen() {
 
   Function *F = getFunction(std::string("unary") + m_Opcode);
   if (!F)
-    return LogErrorV("Unknown unary operator");
+    return LogErrorV("Unknown unary operator", getLocation());
   return Builder->CreateCall(F, OperandV, "unop");
 }
 

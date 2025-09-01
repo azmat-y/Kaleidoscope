@@ -28,7 +28,7 @@ using namespace llvm::sys;
 /// top ::= definition | external | expression | ';'
 static void MainLoop() {
   while (true) {
-    switch (CurTok) {
+    switch (CurTok.Type) {
     case tok_eof:
       return;
     case ';':

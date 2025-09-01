@@ -19,5 +19,5 @@ std::unique_ptr<PrototypeAST> ParseExtern();
 std::unique_ptr<FunctionAST> ParseTopLevelExpr();
 extern std::map<char, int> BinopPrecedence;
 extern std::unique_ptr<Lexer> TheLexer;
-extern int CurTok;
+extern Token CurTok;
 int getNextToken();
