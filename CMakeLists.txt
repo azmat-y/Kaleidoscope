@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Main)
-add_executable(kaleidoscope  Main.cpp parser.cpp lexer.cpp codegen.cpp)
+add_executable(kaleidoscope  Main.cpp parser.cpp lexer.cpp codegen.cpp kpp.cpp)
 
 find_package(LLVM 20.1 REQUIRED CONFIG
   COMPONENTS

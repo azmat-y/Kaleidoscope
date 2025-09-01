@@ -1,12 +1,12 @@
 #include "include/argparse.hpp"
 #include "include/codegen.h"
+#include "include/kpp.h"
 #include "include/lexer.h"
 #include "include/parser.h"
 #include "llvm-c/Core.h"
 #include "llvm/Support/TargetSelect.h"
 #include <cstdio>
 #include <cstdlib>
-#include <fstream>
 #include <iostream>
 #include <llvm-c/TargetMachine.h>
 #include <llvm/IR/BasicBlock.h>
@@ -20,6 +20,7 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 #include <memory>
+#include <sstream>
 #include <string>
 
 using namespace llvm;
@@ -67,12 +68,10 @@ int main(int argc, char **argv) {
 
   std::string InputFile = program.get<std::string>("input_file");
   bool emitIR = program.get<bool>("--emit-ir");
-  std::ifstream inf{InputFile};
-  if (!inf) {
-    std::cerr << "Error: Could not open file " << InputFile << std::endl;
-    return 1;
-  }
-  TheLexer = std::make_unique<Lexer>(inf);
+  std::stringstream preProcessed;
+  std::set<std::string> includeFiles;
+  processFile(InputFile, includeFiles, preProcessed);
+  TheLexer = std::make_unique<Lexer>(preProcessed);
   // fprintf(stderr, "ready> ");
   getNextToken();
   InitializeModuleAndManagers();
