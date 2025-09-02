@@ -1,32 +1,29 @@
 #include "include/codegen.h"
 #include "include/AST.h"
-#include "include/lexer.h"
 #include "include/parser.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Analysis/CGSCCPassManager.h"
+#include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/PassInstrumentation.h"
+#include "llvm/IR/Verifier.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/StandardInstrumentations.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Scalar/Reassociate.h"
 #include <cstdio>
-#include <llvm/ADT/APFloat.h>
-#include <llvm/Analysis/CGSCCPassManager.h>
-#include <llvm/Analysis/LoopAnalysisManager.h>
-#include <llvm/IR/BasicBlock.h>
-#include <llvm/IR/Constants.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/IR/PassInstrumentation.h>
-#include <llvm/IR/Verifier.h>
-#include <llvm/Passes/PassBuilder.h>
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Transforms/InstCombine/InstCombine.h>
-#include <llvm/Transforms/Scalar/GVN.h>
-#include <llvm/Transforms/Scalar/Reassociate.h>
-#include <llvm/Transforms/Scalar/SimplifyCFG.h>
 #include <map>
 #include <memory>
 
@@ -82,9 +79,6 @@ Value *BinaryExprAST::codegen() {
 
   // Special edge case because we don't want LHS as an expression
   if (m_Op == '=') {
-    // This assume we're building without RTTI because LLVM builds that way by
-    // default. If you build LLVM with RTTI this can be changed to a
-    // dynamic_cast for automatic error checking.
     VariableExprAST *LHSE = static_cast<VariableExprAST *>(m_LHS.get());
     if (!LHSE)
       return LogErrorV("Unknown variable name", getLocation());
@@ -191,7 +185,6 @@ Function *FunctionAST::codegen() {
   NamedValues.clear();
   for (auto &Arg : TheFunction->args()) {
     // create an Alloca for this variable
-    // AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
     AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
     // Store the initial value into the alloca.
     Builder->CreateStore(&Arg, Alloca);

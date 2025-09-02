@@ -2,7 +2,6 @@
 #include "include/AST.h"
 #include "include/lexer.h"
 #include <cstdio>
-#include <llvm/IR/Value.h>
 #include <map>
 #include <memory>
 #include <string>
@@ -11,9 +10,6 @@
 
 std::unique_ptr<Lexer> TheLexer;
 Token CurTok;
-// int CurTok;
-// std::string IdentifierStr;
-// double NumVal;
 
 // helper function for logging error messages
 template <class T> std::unique_ptr<T> LogError(const char *Str) {
