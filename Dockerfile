@@ -9,3 +9,7 @@ RUN dnf install -y \
     && dnf clean all
 
 WORKDIR /app
+COPY . /app
+RUN cmake --preset release
+RUN cmake --build build
+ENTRYPOINT ["build/kaleidoscope"]

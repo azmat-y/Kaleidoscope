@@ -39,3 +39,13 @@ build/kaleidoscope demo/set.kd
 More examples are inside the demo directory. 
 
 Keep in mind that, if you want to directly execute a file it must have top level expressions. As they are put inside the main function.
+
+## Running with docker
+
+```
+cd Kaleidoscope
+docker build -t kd:1.0 .
+docker run --name compiler kd:1.0 demo/set.kd
+docker cp compiler:/app/a.out .
+./a.out
+```
