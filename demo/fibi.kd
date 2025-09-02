@@ -1,12 +1,12 @@
-def binary : 1 (x y) y;
+include "std.kd"
+
 def fibi(x)
   var a = 1, b = 1, c in
   (for i = 3, i < x in
      c = a + b :
      a = b :
      b = c) :
-  b;
+  b
 
-# Call it.
 extern printd(x);
-printd(fibi(2));
+printd(fibi(23))

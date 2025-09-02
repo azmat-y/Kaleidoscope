@@ -3,3 +3,6 @@ def factorial(x)
        1
     else
 	x * factorial(x-1)
+
+extern printd(x)
+printd(factorial(5))
